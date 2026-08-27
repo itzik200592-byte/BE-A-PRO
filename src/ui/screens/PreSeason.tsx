@@ -24,7 +24,7 @@ export function PreSeasonMarket({
 }: {
   gs: G.GameState;
   firstCareer: boolean;
-  onOpenMarket: () => void;
+  onOpenMarket: (line?: G.MarketLine) => void;
   onResolveDeparture: (kind: 'star' | 'young', optionIndex: number) => void;
   onRenew: (playerId: string) => void;
   onRelease: (playerId: string) => void;
@@ -110,7 +110,7 @@ export function PreSeasonMarket({
         </div>
 
         {/* the squad, so the manager can see what he has and where the holes are */}
-        <SquadPanel squad={sq} onOpen={setCard} />
+        <SquadPanel squad={sq} onOpen={setCard} onNeed={onOpenMarket} />
 
         {/* the desk: sagas and expiring deals */}
         {events.length > 0 && (
@@ -127,7 +127,7 @@ export function PreSeasonMarket({
         )}
 
         {/* the open market, reachable every round */}
-        <button className="tile select" onClick={onOpenMarket} style={{
+        <button className="tile select" onClick={() => onOpenMarket()} style={{
           textAlign: 'start', display: 'flex', gap: 12, alignItems: 'center',
           borderColor: 'color-mix(in srgb, var(--win) 34%, transparent)',
           background: 'linear-gradient(180deg, color-mix(in srgb, var(--win) 8%, var(--surface-2)), var(--surface))',
@@ -181,8 +181,12 @@ const LINES = ['gk', 'def', 'mid', 'atk'] as const;
 const IDEAL: Record<(typeof LINES)[number], number> = { gk: 2, def: 5, mid: 4, atk: 3 };
 const surname = (n: string) => n.split(' ').slice(-1)[0];
 
-/** The squad read line by line, with thin areas flagged so gaps are obvious. */
-function SquadPanel({ squad, onOpen }: { squad: Squad; onOpen: (p: Player) => void }) {
+/** The squad read line by line, with thin areas flagged so gaps are obvious.
+ *  A flagged line, or the header summary, jumps straight to the market filtered
+ *  to exactly the position that is short. */
+function SquadPanel({ squad, onOpen, onNeed }: {
+  squad: Squad; onOpen: (p: Player) => void; onNeed: (line: G.MarketLine) => void;
+}) {
   const all = [...squad.starters, ...squad.bench];
   const grouped = LINES.map(key => ({
     key, label: LINE_LABEL[key], color: LINE_COLOR[key], min: IDEAL[key],
@@ -195,9 +199,9 @@ function SquadPanel({ squad, onOpen }: { squad: Squad; onOpen: (p: Player) => vo
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
         <div className="label-cap">הסגל שלך</div>
         {gaps.length > 0
-          ? <span className="chip" style={{ background: 'color-mix(in srgb, var(--loss) 16%, transparent)', color: 'var(--loss)' }}>
-              חסר: {gaps.map(g => g.label).join(' · ')}
-            </span>
+          ? <button onClick={() => onNeed(gaps[0].key)} className="chip" style={{ background: 'color-mix(in srgb, var(--loss) 16%, transparent)', color: 'var(--loss)' }}>
+              חסר: {gaps.map(g => g.label).join(' · ')} <Icon name="chevron" size={13} color="var(--loss)" />
+            </button>
           : <span className="chip" style={{ background: 'color-mix(in srgb, var(--win) 15%, transparent)', color: 'var(--win)' }}>סגל מאוזן</span>}
       </div>
       <div className="tile" style={{ padding: '4px 12px 10px' }}>
@@ -210,9 +214,11 @@ function SquadPanel({ squad, onOpen }: { squad: Squad; onOpen: (p: Player) => vo
                 <span className="num" style={{ color: 'var(--ink-faint)', fontSize: 13, fontWeight: 800 }}>{l.players.length}</span>
               </div>
               {l.players.length < l.min && (
-                <span className="chip" style={{ background: 'color-mix(in srgb, var(--loss) 15%, transparent)', color: 'var(--loss)', fontSize: 12 }}>
-                  צריך תגבור
-                </span>
+                <button onClick={() => onNeed(l.key)} className="chip" style={{
+                  background: 'color-mix(in srgb, var(--loss) 15%, transparent)', color: 'var(--loss)', fontSize: 12,
+                }}>
+                  צריך תגבור <Icon name="handshake" size={12} color="var(--loss)" />
+                </button>
               )}
             </div>
             <div className="row" style={{ flexWrap: 'wrap', gap: 7 }}>

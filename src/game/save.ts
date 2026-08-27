@@ -95,6 +95,7 @@ export function loadCareer(): GameState | null {
     fanHistory: s.fanHistory ?? [],
     stadium: s.stadium ?? { capacity: STADIUM_START, project: null },
     stadiumReveal: s.stadiumReveal ?? null,
+    marketFocus: s.marketFocus ?? null,
   };
   if (patched.phase === 'match') return { ...patched, phase: 'hub' };
   return patched;

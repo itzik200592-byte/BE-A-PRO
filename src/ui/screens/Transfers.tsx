@@ -6,7 +6,7 @@ import { assignTraits } from '../../data/personalities.ts';
 import { Meters, formatMoney } from '../components/bits.tsx';
 import { PlayerCard } from '../components/PlayerCard.tsx';
 import { Portal } from '../components/Portal.tsx';
-import { PlayerRow, ovrColor } from './Squad.tsx';
+import { PlayerRow, ovrColor, LINE_OF, LINE_LABEL } from './Squad.tsx';
 import { MAX_SQUAD, MIN_SQUAD, sellPrice, contractTerms } from '../../game/transfers.ts';
 import type { FreeAgent } from '../../game/transfers.ts';
 
@@ -22,6 +22,9 @@ export function TransfersScreen({ gs, onSign, onSell, onBack }: {
   const [msg, setMsg] = useState<string | null>(null);
   const [offer, setOffer] = useState<FreeAgent | null>(null);   // contract being negotiated
   const [card, setCard] = useState<Player | null>(null);        // player card being read
+  // the market can be filtered to one line, and opens pre-filtered when reached
+  // from a "needs reinforcement" gap on the summer board
+  const [lineFilter, setLineFilter] = useState<G.MarketLine | 'all'>(gs.marketFocus ?? 'all');
   const win = G.transferWindow(gs);
   const sq = G.mySquad(gs);
   const size = G.squadSize(gs);
@@ -97,10 +100,16 @@ export function TransfersScreen({ gs, onSign, onSell, onBack }: {
         {msg && <div className="tile" style={{ padding: '10px 13px', fontSize: 14.5, fontWeight: 700 }} aria-live="polite">{msg}</div>}
 
         {tab === 'market' && (
-          gs.market.length === 0
-            ? <Empty text="אין כרגע שחקנים חופשיים. נסה שוב בחלון הבא." />
-            : <div className="stack" style={{ gap: 10 }}>
-                {gs.market.map(fa => {
+          <>
+            <LineFilter value={lineFilter} onChange={setLineFilter} market={gs.market} />
+            {(() => {
+              const shown = lineFilter === 'all' ? gs.market : gs.market.filter(fa => LINE_OF[fa.player.position] === lineFilter);
+              return shown.length === 0
+                ? <Empty text={lineFilter === 'all'
+                    ? 'אין כרגע שחקנים חופשיים. נסה שוב בחלון הבא.'
+                    : `אין כרגע ${LINE_LABEL[lineFilter]} פנויים בשוק.`} />
+                : <div className="stack" style={{ gap: 10 }}>
+                {shown.map(fa => {
                   const o = overall(fa.player);
                   const blocked = G.signBlockedReason(gs, fa);
                   return (
@@ -120,7 +129,9 @@ export function TransfersScreen({ gs, onSign, onSell, onBack }: {
                     </div>
                   );
                 })}
-              </div>
+              </div>;
+            })()}
+          </>
         )}
 
         {tab === 'mine' && (
@@ -220,6 +231,40 @@ function ContractLine({ label, value, hint }: { label: string; value: string; hi
         {hint && <div className="sub" style={{ fontSize: 12.5 }}>{hint}</div>}
       </div>
       <div className="num" style={{ fontWeight: 900, fontSize: 16, color: 'var(--gold-hi)' }}>{value}</div>
+    </div>
+  );
+}
+
+/** Filter the free agents by squad line, with a live count on each chip. */
+function LineFilter({ value, onChange, market }: {
+  value: G.MarketLine | 'all';
+  onChange: (v: G.MarketLine | 'all') => void;
+  market: FreeAgent[];
+}) {
+  const counts: Record<string, number> = { all: market.length, gk: 0, def: 0, mid: 0, atk: 0 };
+  for (const fa of market) counts[LINE_OF[fa.player.position]]++;
+  const opts: { key: G.MarketLine | 'all'; label: string }[] = [
+    { key: 'all', label: 'הכל' },
+    { key: 'gk', label: LINE_LABEL.gk },
+    { key: 'def', label: LINE_LABEL.def },
+    { key: 'mid', label: LINE_LABEL.mid },
+    { key: 'atk', label: LINE_LABEL.atk },
+  ];
+  return (
+    <div className="row" style={{ gap: 7, flexWrap: 'wrap' }}>
+      {opts.map(o => {
+        const on = value === o.key;
+        return (
+          <button key={o.key} onClick={() => onChange(o.key)} style={{
+            padding: '7px 12px', borderRadius: '9px 9px 9px 3px', fontWeight: 800, fontSize: 13.5,
+            border: `1px solid ${on ? 'transparent' : 'var(--line-2)'}`,
+            background: on ? 'linear-gradient(180deg,var(--gold-hi),var(--gold))' : 'var(--surface)',
+            color: on ? '#1B1305' : 'var(--ink-dim)',
+          }}>
+            {o.label} <span className="num" style={{ opacity: .7 }}>{counts[o.key]}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

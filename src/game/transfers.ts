@@ -39,6 +39,13 @@ export interface FreeAgent {
 
 const POOL_POSITIONS: Position[] = ['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'RW', 'LW', 'ST', 'CB', 'ST'];
 
+/**
+ * A spine that guarantees the market always covers every line, with two
+ * keepers, so a manager who sells a goalkeeper can always buy one. Positions
+ * past the spine are filled at random for variety.
+ */
+const MARKET_SPINE: Position[] = ['GK', 'CB', 'CM', 'ST', 'LB', 'CAM', 'RW', 'GK', 'RB', 'CDM', 'LW', 'CB', 'ST', 'CM'];
+
 const NOTES_YOUNG = ['יצא מהנוער של קבוצה גדולה', 'סוכן דוחף אותו חזק', 'לא קיבל צ׳אנס בקבוצה הקודמת'];
 const NOTES_PRIME = ['חופשי אחרי סיום חוזה', 'רוצה לשחק קרוב לבית', 'ירד ליגה ומחפש להוכיח'];
 const NOTES_OLD = ['ותיק, יביא ניסיון לחדר ההלבשה', 'בשנים האחרונות שלו', 'מכיר את הליגה בעל פה'];
@@ -48,12 +55,12 @@ const NOTES_OLD = ['ותיק, יביא ניסיון לחדר ההלבשה', 'ב�
  * `taken` holds names already in use so a free agent never shares a name
  * with someone in your own squad.
  */
-export function makeMarket(tier: number, rng: Rng, size = 10, taken?: Set<string>): FreeAgent[] {
+export function makeMarket(tier: number, rng: Rng, size = 12, taken?: Set<string>): FreeAgent[] {
   const ceiling = leagueCeiling(tier);
   const used = new Set<string>(taken ?? []);
   const out: FreeAgent[] = [];
   for (let i = 0; i < size; i++) {
-    const pos = POOL_POSITIONS[Math.floor(rng() * POOL_POSITIONS.length)];
+    const pos = i < MARKET_SPINE.length ? MARKET_SPINE[i] : POOL_POSITIONS[Math.floor(rng() * POOL_POSITIONS.length)];
     const base = ceiling - 10 + Math.round(rng() * 12);
     const traits = { ...NEUTRAL_TRAITS, youth: i < 3 ? 0.75 : 0.1 };
     const player = makePlayer(pos, base, rng, traits, used);

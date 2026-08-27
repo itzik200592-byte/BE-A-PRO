@@ -36,6 +36,8 @@ export type Phase =
   | 'dilemma' | 'tactic' | 'match' | 'result' | 'press' | 'season-end' | 'chronicle'
   | 'captain' | 'assistant' | 'preseason' | 'preseason-market' | 'inbox' | 'chat' | 'table' | 'stadium';
 
+export type MarketLine = 'gk' | 'def' | 'mid' | 'atk';
+
 export interface Meters { money: number; morale: number; prestige: number; }
 
 /** The home ground and any expansion currently under construction. */
@@ -115,6 +117,8 @@ export interface GameState {
   week: number;
   league: LeagueState;
   market: FreeAgent[];
+  /** the position line the market opens filtered to, when reached from a gap */
+  marketFocus: MarketLine | null;
   dilemma: RolledDilemma | null;
   dilemmaHistory: string[];
   /** messages that can wait, read from the hub whenever you like */
@@ -198,6 +202,7 @@ export function newGame(seed = 12345): GameState {
     week: 1,
     league: initLeague(LEAGUE_C, seed),
     market: [],
+    marketFocus: null,
     dilemma: null,
     dilemmaHistory: [],
     inbox: [],
@@ -272,7 +277,7 @@ export function pickClub(gs: GameState, clubId: string): GameState {
       morale: clamp(65 + ap.morale, 0, 100),
       prestige: clamp(c.traits.prestige + ap.prestige, 0, 100),
     },
-    market: makeMarket(c.tier, rng, 10, takenNames),
+    market: makeMarket(c.tier, rng, 12, takenNames),
     phase: 'signing',
   };
 }
@@ -619,8 +624,8 @@ export function clearStadiumReveal(gs: GameState): GameState {
 export function openSquad(gs: GameState): GameState {
   return { ...gs, phase: 'squad' };
 }
-export function openTransfers(gs: GameState): GameState {
-  return { ...gs, phase: 'transfers' };
+export function openTransfers(gs: GameState, focus: MarketLine | null = null): GameState {
+  return { ...gs, phase: 'transfers', marketFocus: focus };
 }
 export function backToHub(gs: GameState): GameState {
   return { ...gs, phase: 'hub' };
@@ -1449,7 +1454,7 @@ export function startNextSeason(gs: GameState): GameState {
     lastReport: report,
     week: 1,
     league,
-    market: makeMarket(r.newTier, rng, 10, takenNames),
+    market: makeMarket(r.newTier, rng, 12, takenNames),
     meters: {
       // prize money in, a full season of wages out
       money: Math.max(0, rawMoney),

@@ -107,7 +107,7 @@ export function App() {
       )}
       {gs.phase === 'preseason-market' && (
         <PreSeasonMarket gs={gs} firstCareer={gs.season === 1}
-          onOpenMarket={() => { setFromPreseason(true); setGs(G.openTransfers(gs)); }}
+          onOpenMarket={line => { setFromPreseason(true); setGs(G.openTransfers(gs, line ?? null)); }}
           onResolveDeparture={(kind, oi) => setGs(g => G.resolveDeparture(g, kind, oi))}
           onRenew={id => setGs(g => G.renewContract(g, id))}
           onRelease={id => setGs(g => G.releasePlayer(g, id))}
