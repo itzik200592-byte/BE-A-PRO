@@ -55,6 +55,8 @@ export interface FanContext {
   isDerby: boolean;
   isHome: boolean;
   rival: string;
+  /** the club's home town, so the terrace can say its own name */
+  city: string;
   /** a starter who has gone a long time without scoring, if there is one */
   coldStriker: string | null;
   coldWeeks: number;
@@ -179,6 +181,23 @@ const PRE: Line[] = [
     when: c => !c.isHome,
     text: c => `נוסעים ל${c.rival}, יוצאים בצהריים בשביל משחק בערב. אל תביישו אותנו שם, באנו מרחוק.` },
 
+  // the town itself, this is what makes it your club and not just a club
+  { id: 'city-hope', voice: 'hope',
+    when: () => true,
+    text: c => `כל ${c.city} מדברת רק על המשחק הזה. תביא לעיר יום כזה, אנחנו צריכים את זה.` },
+  { id: 'city-heart', voice: 'heart',
+    when: () => true,
+    text: c => `אני נולדתי ב${c.city}, אבא שלי בא לפה לפניי. תעשה שנלך גאים ברחוב אחרי המשחק.` },
+  { id: 'city-sage', voice: 'sage',
+    when: () => true,
+    text: c => `אני רואה כדורגל ב${c.city} עוד לפני שהיה לך שיער בפרצוף. תקשיב למי שמכיר את הקבוצה הזאת.` },
+  { id: 'city-nost', voice: 'nostalgic',
+    when: c => c.isHome,
+    text: c => `פעם חצי ${c.city} הייתה במגרש במשחק כזה. תזכיר להם על מה אנחנו משחקים פה.` },
+  { id: 'city-num', voice: 'numbers',
+    when: () => true,
+    text: c => `${c.city} מחכה לעלייה כבר שנים. אני יודע כמה נקודות צריך, רק תעשה את שלך על המגרש.` },
+
   // context lines that any everyman voice can carry
   { id: 'ctx-cold',
     when: c => c.coldStriker !== null && c.coldWeeks >= 3,
@@ -258,6 +277,17 @@ const POST: Line[] = [
   { id: 'hot-loss', voice: 'hot',
     when: c => c.result === 'loss',
     text: () => `יצאתי צרוד ועצבני, אבל מחר כבר אחשוב על המשחק הבא. ככה זה כשאוהבים, תעשה שיהיה שווה.` },
+
+  // the town, after the whistle
+  { id: 'city-win', voice: 'heart',
+    when: c => c.result === 'win',
+    text: c => `הלילה כל ${c.city} חוגגת. עברתי ברחוב וכולם מחייכים, זה מה שאנחנו אוהבים אצלך.` },
+  { id: 'city-win-hope', voice: 'hope',
+    when: c => c.result === 'win',
+    text: c => `${c.scoreLine}. עוד כאלה ו${c.city} חוזרת למפה של הכדורגל. אמרתי לך שזו השנה שלנו.` },
+  { id: 'city-loss', voice: 'heart',
+    when: c => c.result === 'loss',
+    text: c => `כל ${c.city} הולכת לישון עצובה הלילה. תחזיר לנו את החיוך במחזור הבא, בשביל העיר.` },
 
   // context
   { id: 'ctx-win-derby',

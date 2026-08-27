@@ -956,7 +956,7 @@ export function fanContext(gs: GameState, timing: FanTiming): FanContext {
 
   const ctx: FanContext = {
     timing, isDerby: fx ? isDerby(fx.homeId, fx.awayId) : false,
-    isHome: iAmHome, rival,
+    isHome: iAmHome, rival, city: club(gs).city,
     coldStriker, coldWeeks,
     youngster: kid?.name ?? null,
     approach: gs.tactic.approach,
@@ -1339,6 +1339,7 @@ export function continueFromResult(gs: GameState): GameState {
     tablePos, totalTeams: gs.league.clubs.length,
     star: topPlayerName(mySquad(gs)),
     rival: rival.short,
+    city: club(gs).city,
   };
   const rng = createRng(gs.seasonSeed * 100 + gs.week * 31 + 5)();
   return { ...gs, phase: 'press', press: pickPressQuestion(ctx, rng) };

@@ -22,6 +22,7 @@ export interface PressContext {
   totalTeams: number;
   star: string;          // your best player's family name
   rival: string;         // opponent short name
+  city: string;          // the club's home town, for the local press angle
 }
 
 export interface PressAnswer {
@@ -144,6 +145,38 @@ const RELEGATION: QGen = c => ({
   ],
 });
 
+/**
+ * The local angle. The town paper cares less about the league table and more
+ * about whether its own club is going somewhere, which is exactly the belonging
+ * the city pick is built on.
+ */
+const LOCAL: QGen[] = [
+  c => ({
+    tone: 'serious',
+    text: `כתב מקומון ${c.city} כאן. כל העיר שואלת אותי מתי סוף סוף חוזרים למקום שמגיע לנו. מה אני אגיד להם?`,
+    answers: [
+      { label: `${c.city} תהיה גאה בקבוצה הזאת`, effect: { prestige: +3, morale: +3 }, reply: 'הבטחה ישירה לתושבים. הרחוב אהב.' },
+      { label: 'תגיד להם לבוא למגרש ולראות', effect: { morale: +2 }, reply: 'קריאה ליציע. פשוט ונכון.' },
+    ],
+  }),
+  c => ({
+    tone: 'funny',
+    text: `ב${c.city} כבר מדברים עליך בבתי קפה יותר מאשר על ראש העיר. איך זה מרגיש?`,
+    answers: [
+      { label: 'שיפסיקו, אני בסך הכל עושה עבודה', effect: { morale: +2 }, reply: 'ענווה מקומית. חיבבו את זה.' },
+      { label: 'ראש עיר מתחלף, מאמן טוב נשאר', effect: { prestige: +3 }, reply: 'שורה לכותרת. חצי חייכו, חצי הרימו גבה.' },
+    ],
+  }),
+  c => ({
+    tone: 'serious',
+    text: `הרבה ילדים ב${c.city} התחילו ללבוש את הצבעים בזכות מה שאתה עושה. אתה מרגיש את האחריות הזאת?`,
+    answers: [
+      { label: 'זו הסיבה שאני פה', effect: { prestige: +2, morale: +3 }, reply: 'תשובה מהלב. המקומון יכתיר אותה.' },
+      { label: 'קודם תוצאות, אחר כך רגש', effect: { prestige: +2 }, reply: 'ענייני. חלק ציפו ליותר חום.' },
+    ],
+  }),
+];
+
 const TOP: QGen = c => ({
   tone: 'serious',
   text: `אתם בפסגת הטבלה. המילה אליפות כבר לא מוגזמת. אתה מוכן להגיד אותה בקול?`,
@@ -161,6 +194,12 @@ export function pickPressQuestion(c: PressContext, rng: number): { outlet: Outle
   if (c.isDerby && rng > 0.4) return { outlet, q: DERBY(c) };
   if (c.tablePos >= c.totalTeams - 1 && (c.result === 'loss' || c.result === 'draw')) return { outlet, q: RELEGATION(c) };
   if (c.tablePos === 1 && (c.result === 'win' || c.result === 'big_win')) return { outlet, q: TOP(c) };
+
+  // roughly a quarter of the time the town paper gets in first, with its own byline
+  if (rng < 0.25) {
+    const q = LOCAL[Math.floor(rng * 4) % LOCAL.length](c);
+    return { outlet: `מקומון ${c.city}` as Outlet, q };
+  }
 
   const pool = BY_RESULT[c.result];
   const q = pool[Math.floor(rng * pool.length)];
