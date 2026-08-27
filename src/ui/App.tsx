@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import * as G from '../game/state.ts';
 import { saveCareer, loadCareer, savedSummary, clearCareer } from '../game/save.ts';
 import type { SaveSummary } from '../game/save.ts';
@@ -38,6 +38,16 @@ export function App() {
 
   // persist the career whenever it changes, so closing the tab is not a loss
   useEffect(() => { if (booted) saveCareer(gs); }, [gs, booted]);
+
+  // Every screen change starts at the top. Without this the next page opens at
+  // the previous page's scroll position, which makes the game look frozen.
+  const screenKey = !entered ? 'gate' : !introDone ? 'intro' : !booted ? 'title' : gs.phase;
+  useLayoutEffect(() => {
+    const targets = [document.scrollingElement, document.documentElement, document.body,
+      document.getElementById('root'), document.querySelector('.frame')];
+    for (const el of targets) if (el) (el as HTMLElement).scrollTop = 0;
+    window.scrollTo(0, 0);
+  }, [screenKey]);
 
   function startNew() {
     clearCareer();
