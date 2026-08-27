@@ -7,7 +7,8 @@ import type { MatchResult, TeamInput, Approach, Press, Player, Position, Rng } f
 import { simulateMatch, overall, createRng } from '../engine/matchEngine.ts';
 import type { LeagueState, Fixture } from './league.ts';
 import { initLeague, applyResult, sortedTable, buildFixtures, emptyTable } from './league.ts';
-import { LEAGUE_C, isDerby, LEAGUE_NAMES } from '../data/clubs.ts';
+import { LEAGUE_C, isDerby, LEAGUE_NAMES, setDerbies, derbiesFromClubs } from '../data/clubs.ts';
+import { buildRegionLeague } from '../data/cities.ts';
 import { TEMPLATES, eligible, rollDilemma } from '../data/dilemmas.ts';
 import type { RolledDilemma, DilemmaEffect, Ctx as DilemmaCtx } from '../data/dilemmas.ts';
 import { pickPressQuestion } from '../data/press.ts';
@@ -277,6 +278,19 @@ export function setProfile(gs: GameState, profile: ManagerProfile): GameState {
 }
 
 /** Club choice sets the money, the prestige and the squad you inherit. */
+/**
+ * Pick your city. The bottom division is rebuilt around it, your town plus the
+ * seven nearest real towns, and the club of your city becomes yours. This is
+ * the belonging hook, so the whole region is real, not a menu of invented names.
+ */
+export function pickCity(gs: GameState, cityName: string): GameState {
+  const region = buildRegionLeague(cityName, 1);
+  setDerbies(derbiesFromClubs(region.clubs));
+  const league = initLeague(region.clubs, gs.seasonSeed);
+  // the chosen city rides on the club itself (club.city), no extra state needed
+  return pickClub({ ...gs, league }, region.myId);
+}
+
 export function pickClub(gs: GameState, clubId: string): GameState {
   const c = gs.league.clubs.find(x => x.id === clubId)!;
   const m = getManager(gs.profile.type);
@@ -1517,6 +1531,8 @@ export function startNextSeason(gs: GameState): GameState {
     table: emptyTable(next.clubs),
     rounds: (next.clubs.length - 1) * 2,
   };
+  // keep the derby registry in step with whoever is in the division now
+  setDerbies(derbiesFromClubs(league.clubs));
 
   const r = next.report;
   const mine = next.squads[gs.clubId];

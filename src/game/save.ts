@@ -11,6 +11,7 @@ import type { GameState, PlayerSeason } from './state.ts';
 import { STADIUM_START } from './career.ts';
 import { GEMS_AT_START } from './packs.ts';
 import { primePlayerIds } from '../data/squadGen.ts';
+import { setDerbies, derbiesFromClubs } from '../data/clubs.ts';
 
 const KEY = 'beapro.career.v1';
 const VERSION = 1;
@@ -69,6 +70,9 @@ export function loadCareer(): GameState | null {
   // season's market never mints an id that collides with an existing player
   const allIds: string[] = [...playerById.keys(), ...(s.market ?? []).map(f => f.player.id)];
   primePlayerIds(allIds);
+  // rebuild the geographic derby registry from the saved clubs' rivals, since
+  // it is module state that does not survive a reload
+  setDerbies(derbiesFromClubs(s.league?.clubs ?? []));
   // gracefully fill fields added in later versions so old saves keep working
   const patched: GameState = {
     ...s,
