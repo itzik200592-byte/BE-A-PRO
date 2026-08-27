@@ -1,0 +1,10 @@
+node_modules
+dist
+.vite
+*.local
+.DS_Store
+# scratch / temp test files
+src/__*.mts
+pilot/
+PIC/
+*.zip

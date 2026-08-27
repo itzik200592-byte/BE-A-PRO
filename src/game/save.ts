@@ -1,0 +1,119 @@
+/**
+ * Career persistence. Without this the game forgets you the moment the tab
+ * closes, which is the fastest way to lose a player for good.
+ *
+ * The whole GameState is serialisable (plain data, no class instances), so a
+ * straight JSON round trip is enough. The version field lets old saves be
+ * rejected cleanly instead of crashing on a changed shape.
+ */
+
+import type { GameState, PlayerSeason } from './state.ts';
+import { STADIUM_START } from './career.ts';
+
+const KEY = 'beapro.career.v1';
+const VERSION = 1;
+
+interface Envelope {
+  version: number;
+  savedAt: number;
+  state: GameState;
+}
+
+export interface SaveSummary {
+  clubName: string;
+  managerName: string;
+  week: number;
+  rounds: number;
+  savedAt: number;
+}
+
+export function saveCareer(state: GameState): void {
+  // do not persist half finished onboarding, there is nothing to return to
+  if (!state.clubId || state.phase === 'onboard-manager' || state.phase === 'onboard-club') return;
+  try {
+    const env: Envelope = { version: VERSION, savedAt: Date.now(), state };
+    localStorage.setItem(KEY, JSON.stringify(env));
+  } catch {
+    /* storage full or blocked, the game keeps working in memory */
+  }
+}
+
+function readEnvelope(): Envelope | null {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return null;
+    const env = JSON.parse(raw) as Envelope;
+    if (env?.version !== VERSION || !env.state?.clubId) return null;
+    return env;
+  } catch {
+    return null;
+  }
+}
+
+export function loadCareer(): GameState | null {
+  const env = readEnvelope();
+  if (!env) return null;
+  // a match in progress cannot be resumed mid minute, send them back to the hub
+  const s = env.state;
+  // an index of every player still in the division, to backfill records that
+  // predate name and club being stored on the season stat
+  const playerById = new Map<string, { name: string; clubId: string }>();
+  for (const [cid, sq] of Object.entries(s.league?.squads ?? {})) {
+    for (const p of [...(sq.starters ?? []), ...(sq.bench ?? [])]) {
+      playerById.set(p.id, { name: p.name, clubId: cid });
+    }
+  }
+  // gracefully fill fields added in later versions so old saves keep working
+  const patched: GameState = {
+    ...s,
+    chronicle: s.chronicle ?? [],
+    chronicleSeen: s.chronicleSeen ?? 0,
+    inbox: s.inbox ?? [],
+    lastLedger: s.lastLedger ?? null,
+    chat: s.chat ?? null,
+    chatHistory: s.chatHistory ?? [],
+    careerStats: s.careerStats ?? {},
+    // season records gained name, club and assists. Older saves have none, so
+    // recover name and club from the live squads by the player's stable id,
+    // otherwise the scoring charts filter the nameless records straight out.
+    seasonStats: Object.fromEntries(Object.entries(s.seasonStats ?? {}).map(([id, v]) => {
+      const r = v as Partial<PlayerSeason>;
+      const at = playerById.get(id);
+      return [id, {
+        name: r.name || at?.name || '', clubId: r.clubId || at?.clubId || '',
+        apps: r.apps ?? 0, goals: r.goals ?? 0, assists: r.assists ?? 0,
+        lastGoalWeek: r.lastGoalWeek ?? 0,
+      }];
+    })),
+    captainId: s.captainId ?? null,
+    assistant: s.assistant ?? { hired: false, name: '', departed: false },
+    season: s.season ?? 1,
+    lastReport: s.lastReport ?? null,
+    contracts: s.contracts ?? {},
+    preWeek: s.preWeek ?? 0,
+    preResolved: s.preResolved ?? [],
+    fanHistory: s.fanHistory ?? [],
+    stadium: s.stadium ?? { capacity: STADIUM_START, project: null },
+    stadiumReveal: s.stadiumReveal ?? null,
+  };
+  if (patched.phase === 'match') return { ...patched, phase: 'hub' };
+  return patched;
+}
+
+export function savedSummary(): SaveSummary | null {
+  const env = readEnvelope();
+  if (!env) return null;
+  const s = env.state;
+  const club = s.league.clubs.find(c => c.id === s.clubId);
+  return {
+    clubName: club?.name ?? 'המועדון שלי',
+    managerName: s.profile.name || 'המאמן',
+    week: s.week,
+    rounds: s.league.rounds,
+    savedAt: env.savedAt,
+  };
+}
+
+export function clearCareer(): void {
+  try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+}

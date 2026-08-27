@@ -1,0 +1,428 @@
+/* ============================================================================
+   BE A PRO, design system
+   Art direction: "פוסטר יציע", a stadium at night drawn like a broadcast.
+   Karantina, the condensed Hebrew poster face of Israeli sport, carries every
+   headline and every number. The shape signature is the broadcast plate: one
+   sharp corner on cards, a chamfered cut on solid controls. Gold stays scarce,
+   the floodlights and the grain do the atmosphere.
+   ========================================================================== */
+
+:root{
+  /* ground */
+  --bg-deep:#050907;
+  --bg:#080F0B;
+  --surface:#0E1712;
+  --surface-2:#132018;
+  --surface-3:#1A2C21;
+
+  /* lines */
+  --line:rgba(255,255,255,.065);
+  --line-2:rgba(255,255,255,.13);
+  --line-3:rgba(255,255,255,.22);
+
+  /* ink */
+  --ink:#EEF4EF;
+  --ink-dim:#93A69A;
+  --ink-faint:#5E6E64;
+
+  /* accents, gold is scarce on purpose */
+  --gold:#E9B949;
+  --gold-hi:#F8DC96;
+  --gold-lo:#B98C2A;
+  --grass:#2FA96B;
+  --blood:#E2484D;
+  --sky:#4C9BE8;
+
+  /* semantic */
+  --win:var(--grass); --draw:var(--gold); --loss:var(--blood); --live:var(--blood);
+  --club:var(--gold);            /* overridden per club at runtime */
+
+  /* position colours */
+  --pos-gk:#E9B949; --pos-def:#4C9BE8; --pos-mid:#2FA96B; --pos-atk:#E2484D;
+
+  /* shape signature: plates keep one sharp corner, solid controls get a cut */
+  --r-xs:8px; --r-sm:12px; --r-md:16px; --r-lg:22px; --r-xl:28px;
+  --plate:var(--r-md) var(--r-md) var(--r-md) 5px;
+  --plate-lg:var(--r-lg) var(--r-lg) var(--r-lg) 6px;
+  --plate-sm:var(--r-sm) var(--r-sm) var(--r-sm) 4px;
+  --cut:12px;
+  --chamfer:polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+
+  --e1:0 1px 2px rgba(0,0,0,.4);
+  --e2:0 4px 14px rgba(0,0,0,.42);
+  --e3:0 14px 38px rgba(0,0,0,.55);
+  --glow-gold:0 0 0 1px rgba(233,185,73,.35), 0 8px 26px rgba(233,185,73,.18);
+
+  /* one motion family for the whole app */
+  --ease:cubic-bezier(.22,.75,.2,1);
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --t-fast:140ms; --t-mid:240ms; --t-slow:380ms;
+
+  /* type: bold geometric display, quiet body. Rubik reads clean on a phone
+     where the old condensed face got cramped and dated */
+  --font-display:"Rubik","Heebo",system-ui,sans-serif;
+  --font-body:"Heebo","Rubik",system-ui,sans-serif;
+}
+
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body,#root{height:100%;}
+
+body{
+  margin:0; direction:rtl;
+  font-family:var(--font-body);
+  background:var(--bg-deep); color:var(--ink);
+  font-variant-numeric:tabular-nums;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  overscroll-behavior-y:none;
+}
+
+::selection{background:rgba(233,185,73,.28); color:#fff;}
+::-webkit-scrollbar{width:8px; height:8px;}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12); border-radius:8px;}
+::-webkit-scrollbar-track{background:transparent;}
+
+button{font-family:inherit; cursor:pointer; border:none; color:inherit; touch-action:manipulation; padding:0; background:none;}
+input{font-family:inherit;}
+:focus-visible{outline:2px solid var(--gold); outline-offset:2px; border-radius:6px;}
+
+/* numbers stay LTR inside Hebrew */
+.num{direction:ltr; unicode-bidi:isolate; font-feature-settings:"tnum" 1;}
+/* scoreboard numbers: the bold display face, always LTR, tabular */
+.score-face{font-family:var(--font-display); font-weight:800; direction:ltr; unicode-bidi:isolate; letter-spacing:-.01em; font-feature-settings:"tnum" 1;}
+
+/* ------------------------------------------------------------------ stage */
+/* the phone frame is the stadium: floodlights top left and right, mowing
+   stripes on the grass, a soft pitch glow, a vignette, and film grain */
+.frame{
+  position:relative; isolation:isolate;
+  max-width:440px; margin:0 auto; min-height:100%;
+  display:flex; flex-direction:column;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.014) 0 54px, transparent 54px 108px),
+    radial-gradient(78% 42% at 12% -6%, rgba(196,224,206,.12), transparent 62%),
+    radial-gradient(78% 42% at 88% -6%, rgba(196,224,206,.10), transparent 62%),
+    radial-gradient(120% 62% at 50% 0%, rgba(31,86,55,.55), transparent 68%),
+    linear-gradient(180deg,var(--bg) 0%, var(--bg-deep) 62%);
+  padding-top:env(safe-area-inset-top);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+/* grain, the layer that stops it looking like flat CSS */
+.frame::before{
+  content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+  opacity:.05; mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+/* vignette */
+.frame::after{
+  content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+  background:radial-gradient(120% 78% at 50% 42%, transparent 50%, rgba(0,0,0,.55) 100%);
+}
+.frame > *{position:relative; z-index:1;}
+
+.pad{padding:16px;}
+.pad-b{padding-bottom:32px;}
+.stack{display:flex; flex-direction:column; gap:12px;}
+.row{display:flex; align-items:center; gap:12px;}
+.spacer{flex:1;}
+
+/* screen entrance, every screen shares the same rhythm */
+.screen{animation:screenIn var(--t-mid) var(--ease-out) both;}
+@keyframes screenIn{from{opacity:0; transform:translateY(10px) scale(.995);} to{opacity:1; transform:none;}}
+
+/* ------------------------------------------------------- cold open (intro) */
+/* Continuous Ken Burns per era, each a different move so the montage never
+   feels like it holds on a still. The motion runs THROUGH the flash cut. */
+@keyframes kb1{from{transform:scale(1.06) translate(2%,2.5%);}   to{transform:scale(1.26) translate(-3%,-3%);}}
+@keyframes kb2{from{transform:scale(1.24) translate(-3%,-1%);}   to{transform:scale(1.08) translate(3%,1.5%);}}
+@keyframes kb3{from{transform:scale(1.07) translate(-2%,2%);}    to{transform:scale(1.24) translate(1.5%,-3%);}}
+@keyframes kb4{from{transform:scale(1.05) translate(0,3%);}      to{transform:scale(1.22) translate(0,-4%);}}
+@keyframes introIn{from{opacity:0;} to{opacity:1;}}
+@keyframes introGrain{
+  0%,100%{transform:translate(0,0);} 20%{transform:translate(-4%,3%);}
+  40%{transform:translate(3%,-4%);} 60%{transform:translate(-3%,-3%);} 80%{transform:translate(4%,3%);}
+}
+@keyframes introTitle{from{opacity:0; transform:translateY(14px) scale(1.08); filter:blur(6px);}
+  to{opacity:1; transform:none; filter:blur(0);}}
+
+/* the "typing..." dots on the phone screen */
+@keyframes typingDot{
+  0%,60%,100%{opacity:.35; transform:translateY(0);}
+  30%{opacity:1; transform:translateY(-3px);}
+}
+
+/* ------------------------------------------------------------------- type */
+/* Rubik is a normal width geometric sans, so display sizes come down from the
+   old condensed scale and tracking sits tight, which is how Hebrew wants it */
+.h1{
+  font-family:var(--font-display); font-weight:800;
+  font-size:clamp(30px,8.5vw,40px); line-height:1.05; letter-spacing:-.015em;
+  margin:0; text-wrap:balance;
+}
+.h2{font-family:var(--font-display); font-weight:800; font-size:24px; line-height:1.12; margin:0; letter-spacing:-.01em;}
+.h3{font-weight:800; font-size:16.5px; margin:0;}
+.sub{color:var(--ink-dim); font-size:15px; margin:0; line-height:1.6;}
+
+/* broadcast tag: a slanted gold plate, the lower-third of the app */
+.eyebrow{
+  position:relative; display:inline-block;
+  font-family:var(--font-display); font-weight:800; font-size:14px; letter-spacing:.01em;
+  color:var(--gold); padding:6px 14px; line-height:1.25;
+}
+.eyebrow::before{
+  content:""; position:absolute; inset:0; z-index:-1;
+  background:rgba(233,185,73,.10); border:1px solid rgba(233,185,73,.26);
+  transform:skewX(-10deg); border-radius:3px;
+}
+.label-cap{font-size:12.5px; font-weight:800; letter-spacing:.08em; color:var(--ink-dim); text-transform:none;}
+
+/* -------------------------------------------------------------- surfaces */
+/* the plate: one sharp corner, like a cut ticket stub */
+.tile{
+  background:linear-gradient(180deg,var(--surface-2),var(--surface));
+  border:1px solid var(--line); border-radius:var(--plate);
+  padding:14px; box-shadow:var(--e1);
+}
+.tile-flat{background:var(--surface); border:1px solid var(--line); border-radius:var(--plate);}
+.tile-hero{
+  position:relative; overflow:hidden;
+  background:
+    radial-gradient(100% 120% at 50% -20%, rgba(233,185,73,.10), transparent 60%),
+    linear-gradient(180deg,var(--surface-3),var(--surface));
+  border:1px solid var(--line-2); border-radius:var(--plate-lg);
+  box-shadow:var(--e2);
+}
+/* gold hairline on top + terrace stripes bleeding from the sharp corner */
+.tile-hero::before{
+  content:""; position:absolute; top:0; inset-inline:0; height:2px; pointer-events:none;
+  background:linear-gradient(90deg, transparent 8%, rgba(233,185,73,.55) 50%, transparent 92%);
+}
+.tile-hero::after{
+  content:""; position:absolute; bottom:-24px; inset-inline-start:-24px;
+  width:130px; height:110px; pointer-events:none; opacity:.6;
+  background:repeating-linear-gradient(-45deg, rgba(233,185,73,.07) 0 7px, transparent 7px 18px);
+  mask-image:radial-gradient(100% 100% at 0% 100%, #000, transparent 72%);
+  -webkit-mask-image:radial-gradient(100% 100% at 0% 100%, #000, transparent 72%);
+}
+
+/* selectable card */
+.select{transition:transform var(--t-fast) var(--ease), border-color var(--t-fast), background var(--t-fast), box-shadow var(--t-fast);}
+.select:active{transform:scale(.988);}
+.select[data-on="1"]{
+  border-color:rgba(233,185,73,.55);
+  background:linear-gradient(180deg,var(--surface-3),var(--surface-2));
+  box-shadow:var(--glow-gold);
+}
+
+/* -------------------------------------------------------------- controls */
+/* primary: a chamfered gold plate in the display face, drop-shadow follows
+   the cut (box-shadow would draw the uncut box) */
+.btn{
+  position:relative; display:flex; align-items:center; justify-content:center; gap:8px;
+  width:100%; min-height:54px; padding:14px 20px;
+  clip-path:var(--chamfer);
+  font-family:var(--font-display); font-weight:800; font-size:18.5px; letter-spacing:-.005em;
+  background:linear-gradient(180deg,var(--gold-hi),var(--gold) 55%,var(--gold-lo));
+  color:#1B1305;
+  filter:drop-shadow(0 8px 20px rgba(233,185,73,.22));
+  transition:transform var(--t-fast) var(--ease), filter var(--t-fast);
+  overflow:hidden;
+}
+/* one sheen sweep when the button appears, then it rests */
+.btn::after{
+  content:""; position:absolute; top:0; bottom:0; width:46%;
+  background:linear-gradient(105deg, transparent, rgba(255,255,255,.34), transparent);
+  animation:btnSweep .9s var(--ease-out) .35s 1 both;
+}
+.btn:active{transform:translateY(1px) scale(.985); filter:brightness(.94) drop-shadow(0 4px 12px rgba(233,185,73,.18));}
+/* outline gets clipped by the chamfer, so focus draws inside the plate */
+.btn:focus-visible{outline:none; box-shadow:inset 0 0 0 3px rgba(27,19,5,.6);}
+.btn:disabled{opacity:.36; filter:saturate(.5); cursor:default;}
+.btn:disabled::after{display:none;}
+
+.btn.dark{
+  clip-path:none; border-radius:var(--plate);
+  background:linear-gradient(180deg,var(--surface-3),var(--surface-2));
+  color:var(--ink); border:1px solid var(--line-2);
+  filter:none; box-shadow:var(--e1);
+}
+.btn.dark::after{display:none;}
+.btn.ghost{
+  clip-path:none; border-radius:var(--plate);
+  background:transparent; color:var(--ink); border:1px solid var(--line-2);
+  filter:none; box-shadow:none;
+}
+.btn.ghost::after{display:none;}
+.btn.danger{
+  background:linear-gradient(180deg,#ef6a6e,var(--blood)); color:#fff;
+  filter:drop-shadow(0 8px 20px rgba(226,72,77,.22));
+}
+.btn-sm{min-height:46px; padding:11px 16px; font-size:16px; --cut:9px;}
+
+/* segmented control */
+.seg{display:flex; gap:4px; background:var(--surface); border:1px solid var(--line); border-radius:var(--plate-sm); padding:4px;}
+.seg button{
+  flex:1; padding:10px 6px; border-radius:9px;
+  font-family:var(--font-display); font-weight:700; font-size:15.5px; letter-spacing:-.005em;
+  color:var(--ink-dim); transition:all var(--t-fast) var(--ease);
+}
+.seg button[data-on="1"]{
+  background:linear-gradient(180deg,var(--gold-hi),var(--gold)); color:#1B1305;
+  clip-path:polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+  border-radius:0; box-shadow:none;
+}
+
+/* chips + pills */
+.chip{display:inline-flex; align-items:center; gap:5px; font-size:13px; font-weight:800; padding:5px 10px; border-radius:7px 7px 7px 2px; line-height:1.3;}
+.pill{display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:999px; font-size:13px; font-weight:800;}
+.badge{border-radius:12px; display:grid; place-items:center; font-weight:900; flex:none;}
+
+/* ----------------------------------------------------------------- forms */
+.lbl{display:block; font-size:14px; font-weight:800; color:var(--ink-dim); margin-bottom:7px; letter-spacing:.01em;}
+.hint{font-size:13.5px; color:var(--ink-dim); margin:7px 0 0; line-height:1.55;}
+.field{
+  width:100%; min-height:54px; padding:15px 16px; font-size:16px; color:var(--ink);
+  background:var(--bg); border:1px solid var(--line-2); border-radius:var(--plate);
+  transition:border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.field:focus{outline:none; border-color:var(--gold); box-shadow:0 0 0 3px rgba(233,185,73,.16);}
+.field::placeholder{color:var(--ink-faint);}
+
+/* ---------------------------------------------------------------- meters */
+/* the top strip reads like a broadcast scoreboard: quiet labels, loud digits */
+/* The meters ride at the very top of the frame. The frame already reserves the
+   status bar / notch height, so the bar is pulled up over that reserve and pads
+   it back internally. That way it sits flush with the screen edge yet its
+   numbers always clear the notch, both at rest and when stuck while scrolling. */
+.meters{
+  display:flex; gap:8px; position:sticky; top:0; z-index:20;
+  margin-top:calc(-1 * env(safe-area-inset-top));
+  padding:calc(12px + env(safe-area-inset-top)) 16px 12px;
+  background:linear-gradient(180deg,rgba(8,15,11,.97),rgba(8,15,11,.82));
+  backdrop-filter:blur(14px) saturate(1.2);
+  border-bottom:1px solid var(--line);
+}
+.meter{flex:1; background:var(--surface); border:1px solid var(--line); border-radius:var(--plate-sm); padding:9px 10px 10px;}
+.meter .top{display:flex; justify-content:space-between; align-items:center; gap:6px;}
+.meter .k{font-size:12px; color:var(--ink-dim); font-weight:800; letter-spacing:.03em;}
+.meter .v{font-family:var(--font-display); font-weight:800; font-size:22px; line-height:1; letter-spacing:-.01em; margin-top:5px;}
+.meter .bar{height:3px; border-radius:3px; background:rgba(255,255,255,.08); margin-top:7px; overflow:hidden;}
+.meter .bar>i{display:block; height:100%; border-radius:3px; transition:width var(--t-slow) var(--ease);}
+
+/* ---------------------------------------------------------------- sheets */
+.sheet-scrim{
+  position:fixed; inset:0; z-index:60; background:rgba(2,6,4,.66);
+  backdrop-filter:blur(3px);
+  display:flex; align-items:flex-end; justify-content:center;
+  animation:fadeIn var(--t-fast) ease;
+}
+.sheet{
+  width:100%; max-width:440px;
+  background:linear-gradient(180deg,var(--surface-3),var(--surface));
+  border:1px solid var(--line-2); border-bottom:none;
+  border-radius:var(--r-xl) var(--r-xl) 0 0;
+  padding:12px 18px calc(20px + env(safe-area-inset-bottom));
+  box-shadow:0 -18px 50px rgba(0,0,0,.6);
+  animation:sheetUp var(--t-mid) var(--ease-out);
+}
+.sheet-grip{width:40px; height:4px; border-radius:3px; background:var(--line-3); margin:2px auto 15px;}
+
+/* --------------------------------------------------------------- moments */
+/* The match-decision popup, image-forward and full screen. */
+.moment-scrim{
+  position:fixed; inset:0; z-index:70;
+  background:rgba(2,6,4,.72);
+  backdrop-filter:blur(6px) saturate(.9);
+  display:flex; align-items:center; justify-content:center;
+  padding:16px; animation:fadeIn var(--t-fast) ease;
+}
+.moment{
+  width:100%; max-width:404px; border-radius:var(--plate-lg);
+  background:linear-gradient(180deg,var(--surface-3),var(--surface));
+  border:1px solid var(--line-2); overflow:hidden;
+  box-shadow:0 24px 60px rgba(0,0,0,.7);
+  animation:momentIn .38s var(--ease-out);
+}
+.moment::before{
+  content:""; position:absolute; top:0; inset-inline:0; height:2px; z-index:1; pointer-events:none;
+  background:linear-gradient(90deg, transparent 8%, rgba(233,185,73,.6) 50%, transparent 92%);
+}
+.moment-hero{
+  position:relative; aspect-ratio:9/8;
+  background-size:cover; background-position:center;
+  background-color:var(--surface-3);
+}
+.moment-hero-fade{
+  position:absolute; inset:0;
+  background:linear-gradient(180deg,transparent 40%,var(--surface) 100%);
+}
+.moment-hero-badge{
+  position:absolute; top:12px; inset-inline-end:12px;
+  display:inline-flex; gap:7px; align-items:center;
+  padding:6px 11px; border-radius:999px;
+  border:1px solid var(--line); backdrop-filter:blur(4px);
+}
+.moment-body{padding:6px 18px 20px;}
+
+@keyframes momentIn{
+  from{transform:translateY(24px) scale(.94); opacity:0;}
+  to{transform:translateY(0) scale(1); opacity:1;}
+}
+
+/* ----------------------------------------------------------- player card */
+/* The card is the one place a single footballer gets the hero treatment. */
+.pcard{
+  width:100%; max-width:404px; max-height:88vh; overflow-y:auto;
+  border-radius:var(--plate-lg);
+  background:linear-gradient(180deg,var(--surface-3),var(--surface) 42%);
+  border:1px solid var(--line-2);
+  box-shadow:0 24px 60px rgba(0,0,0,.7);
+  animation:momentIn .34s var(--ease-out);
+  overscroll-behavior:contain;
+}
+.pcard-head{
+  position:relative; overflow:hidden;
+  padding:16px 15px 15px;
+  border-bottom:1px solid var(--line);
+  background:radial-gradient(120% 130% at 82% -30%, rgba(233,185,73,.16), transparent 62%);
+}
+/* gold hairline across the top, same signature as the hero tile */
+.pcard-head::before{
+  content:""; position:absolute; top:0; inset-inline:0; height:2px;
+  background:linear-gradient(90deg, transparent 6%, rgba(233,185,73,.6) 50%, transparent 94%);
+}
+/* terrace stripes bleeding out of the corner behind the rating */
+.pcard-head::after{
+  content:""; position:absolute; bottom:-30px; inset-inline-start:-20px;
+  width:150px; height:120px; pointer-events:none; opacity:.5;
+  background:repeating-linear-gradient(-45deg, rgba(233,185,73,.08) 0 7px, transparent 7px 18px);
+  mask-image:radial-gradient(100% 100% at 0% 100%, #000, transparent 70%);
+  -webkit-mask-image:radial-gradient(100% 100% at 0% 100%, #000, transparent 70%);
+}
+.pcard-crest{
+  position:absolute; top:-26px; inset-inline-end:-22px;
+  opacity:.09; pointer-events:none; filter:grayscale(.3);
+}
+.pcard-body{display:flex; flex-direction:column; gap:14px; padding:15px 15px 18px;}
+
+/* ------------------------------------------------------------- animation */
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes sheetUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes pop{0%{transform:scale(.72);opacity:0}62%{transform:scale(1.06)}100%{transform:scale(1);opacity:1}}
+@keyframes slidein{from{transform:translateX(-12px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes riseIn{from{transform:translateY(9px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes pulseLive{0%,100%{opacity:1}50%{opacity:.45}}
+@keyframes sweep{0%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
+@keyframes btnSweep{from{transform:translateX(-280%)}to{transform:translateX(280%)}}
+
+.live-dot{width:7px; height:7px; border-radius:50%; background:var(--live); animation:pulseLive 1.5s ease-in-out infinite;}
+
+/* staggered list entrance, used with an --i index */
+.stagger > *{animation:riseIn var(--t-mid) var(--ease-out) both; animation-delay:calc(var(--i,0) * 38ms);}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important;}
+}
+
+/* wrong-code nudge on the entry gate */
+@keyframes shake{10%,90%{transform:translateX(-1px);}20%,80%{transform:translateX(2px);}30%,50%,70%{transform:translateX(-4px);}40%,60%{transform:translateX(4px);}}

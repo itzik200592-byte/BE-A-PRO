@@ -1,0 +1,10 @@
+# Netlify deploy config for BE A PRO (static Vite build).
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# It is a single page app, so any unknown path falls back to index.html.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

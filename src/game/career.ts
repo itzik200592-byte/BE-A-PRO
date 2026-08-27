@@ -1,0 +1,486 @@
+/**
+ * The career across seasons. This is what turns a fourteen round sprint into a
+ * climb from ליגה ג' to the top: the squad comes with you, it ages, kids break
+ * out, veterans fade and retire, the division gets harder every promotion.
+ *
+ * The difficulty ramp is the whole point. leagueCeiling grows by 7 OVR per tier
+ * while your squad only grows by whatever you develop or buy, so every
+ * promotion is a genuine crisis that forces you into the market.
+ */
+
+import type { Club } from '../data/clubs.ts';
+import { LEAGUE_C, leagueCeiling } from '../data/clubs.ts';
+import { clubsForTier } from '../data/leagues.ts';
+import type { Squad } from '../data/squadGen.ts';
+import { makePlayer, makeSquad, nextPlayerId } from '../data/squadGen.ts';
+import type { Player, Rng } from '../engine/matchEngine.ts';
+import { overall, createRng } from '../engine/matchEngine.ts';
+
+export const TOP_TIER = 5;
+
+/** How a season ended for the manager. */
+export type SeasonResult = 'champion' | 'promoted' | 'stayed' | 'relegated';
+
+export interface AgeChange { name: string; from: number; to: number; age: number; }
+
+export interface SeasonReport {
+  season: number;
+  tier: number;
+  position: number;
+  result: SeasonResult;
+  newTier: number;
+  purse: number;
+  /** the wage bill charged for the coming season */
+  wages: number;
+  retired: { name: string; age: number }[];
+  risers: AgeChange[];
+  fallers: AgeChange[];
+  joined: string[];
+  /** true when a promotion was earned on the pitch but denied by the ground size */
+  promotionBlocked: boolean;
+}
+
+/** All the clubs of a division, tier 1 being the one you can pick at the start. */
+export function poolForTier(tier: number): Club[] {
+  return tier <= 1 ? LEAGUE_C.map(c => ({ ...c })) : clubsForTier(tier);
+}
+
+/* ------------------------------------------------------------------ aging */
+
+/** Stable 0..1 per player, so the same kid always has the same ceiling. */
+function devFactor(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return ((h >>> 0) % 1000) / 1000;
+}
+
+/**
+ * The level this player can ever reach, hidden from the manager exactly like in
+ * real football. Without a ceiling every young player keeps improving forever
+ * and after ten seasons the whole league floats far above its own division.
+ */
+export function potentialOf(p: Player): number {
+  return Math.round(45 + devFactor(p.id + '|pot') * 45);   // 45..90
+}
+
+/**
+ * The rating this player can realistically still reach, bounded by BOTH his
+ * hidden potential and how much road his age leaves him. A teenager can climb
+ * a lot, a thirty year old barely moves. Returns the ceiling, at or above his
+ * current rating.
+ */
+export function reachableCeiling(p: Player): number {
+  const cur = overall(p);
+  const a = effectiveAge(p);
+  const room =
+    a <= 19 ? 13 :
+    a <= 21 ? 10 :
+    a <= 23 ? 7 :
+    a <= 25 ? 4 :
+    a <= 27 ? 2 :
+    a <= 29 ? 1 :
+    a <= 31 ? 1 :
+    0;
+  return Math.min(99, Math.max(cur, Math.min(potentialOf(p), cur + room)));
+}
+
+/**
+ * The soft band shown to the manager, "roughly how high he tops out". A gentle
+ * spread around the ceiling so it reads as a scout's estimate, not a promise.
+ * Returns null when the player is already at his peak, nothing to show.
+ */
+export function potentialBand(p: Player): { lo: number; hi: number } | null {
+  const cur = overall(p);
+  const ceil = reachableCeiling(p);
+  if (ceil <= cur) return null;
+  const width = 1 + Math.round(devFactor(p.id + '|band'));   // 1 or 2 wide
+  const lo = Math.min(99, Math.max(cur + 1, ceil - width + 1));
+  const hi = Math.min(99, Math.max(lo, ceil + 1));
+  return { lo, hi };
+}
+
+/**
+ * Rating points gained or lost this off season. Young players with a good
+ * development factor jump, everyone flattens through the peak years, and the
+ * over thirties start giving it back. Growth tapers to nothing at potential.
+ */
+function growth(age: number, f: number, current: number, potential: number): number {
+  const raw =
+    age <= 20 ? 2 + f * 4 :
+    age <= 23 ? 1 + f * 3 :
+    age <= 26 ? f * 2 - 0.3 :
+    age <= 29 ? f * 1.2 - 0.9 :
+    age <= 32 ? -1 - (1 - f) * 1.5 :
+    -2 - (1 - f) * 2.5;
+  if (raw <= 0) return raw;
+  const room = Math.max(0, Math.min(1, (potential - current) / 10));
+  return raw * room;
+}
+
+/** Legs go first, the brain goes last. */
+const DECLINE_BIAS: Record<keyof Player['attrs'], number> = {
+  pace: 1.45, physical: 1.2, dribbling: 1.1, shooting: 0.8, defending: 0.8, passing: 0.5,
+};
+
+function applyDelta(p: Player, delta: number) {
+  const keys = Object.keys(p.attrs) as (keyof Player['attrs'])[];
+  for (const k of keys) {
+    const d = delta < 0 ? delta * DECLINE_BIAS[k] : delta;
+    p.attrs[k] = Math.max(30, Math.min(99, Math.round(p.attrs[k] + d)));
+  }
+  if (p.gk) {
+    for (const k of Object.keys(p.gk) as (keyof NonNullable<Player['gk']>)[]) {
+      p.gk[k] = Math.max(30, Math.min(99, Math.round(p.gk[k] + delta)));
+    }
+  }
+}
+
+/** Keepers peak later and last longer, so they age on a shifted curve. */
+function effectiveAge(p: Player): number {
+  return p.position === 'GK' ? p.age - 3 : p.age;
+}
+
+function retires(p: Player, rng: Rng): boolean {
+  const a = effectiveAge(p);
+  if (a >= 37) return true;
+  if (a >= 35) return rng() < 0.55;
+  if (a >= 33) return rng() < 0.18 && overall(p) < 60;
+  return false;
+}
+
+export interface AgeOutcome {
+  squad: Squad;
+  retired: { name: string; age: number }[];
+  risers: AgeChange[];
+  fallers: AgeChange[];
+  joined: string[];
+}
+
+/**
+ * Move the whole squad one year on. Returns the new squad plus a report, which
+ * is what the end of season screen actually shows the manager.
+ */
+export function ageSquad(squad: Squad, rng: Rng, tier: number, minSquad: number): AgeOutcome {
+  const retired: { name: string; age: number }[] = [];
+  const risers: AgeChange[] = [];
+  const fallers: AgeChange[] = [];
+  const joined: string[] = [];
+
+  const carry = (list: Player[]): Player[] => {
+    const out: Player[] = [];
+    for (const src of list) {
+      const p: Player = { ...src, attrs: { ...src.attrs }, gk: src.gk ? { ...src.gk } : undefined };
+      if (retires(p, rng)) { retired.push({ name: p.name, age: p.age }); continue; }
+      const before = overall(p);
+      p.age += 1;
+      applyDelta(p, growth(effectiveAge(p), devFactor(p.id), before, potentialOf(p)));
+      // a fresh pre season resets the body, not the years
+      p.fitness = 88 + Math.floor(rng() * 12);
+      const after = overall(p);
+      if (after > before) risers.push({ name: p.name, from: before, to: after, age: p.age });
+      else if (after < before) fallers.push({ name: p.name, from: before, to: after, age: p.age });
+      out.push(p);
+    }
+    return out;
+  };
+
+  const starters = carry(squad.starters);
+  const bench = carry(squad.bench);
+
+  // youth academy fills whatever the years took, and covers any empty role
+  const used = new Set([...starters, ...bench].map(p => p.name));
+  const NEED: Player['position'][] = ['GK', 'CB', 'CM', 'ST', 'RW', 'LB'];
+  let guard = 0;
+  while (starters.length + bench.length < minSquad && guard++ < 12) {
+    const missingGk = !starters.some(p => p.position === 'GK') && !bench.some(p => p.position === 'GK');
+    const pos = missingGk ? 'GK' : NEED[guard % NEED.length];
+    const kid = makePlayer(pos, leagueCeiling(tier) - 8, rng, undefined, used);
+    kid.age = 17 + Math.floor(rng() * 3);
+    used.add(kid.name);
+    joined.push(kid.name);
+    bench.push(kid);
+  }
+
+  // a keeper must always be in the eleven, promote one if the old one retired
+  if (!starters.some(p => p.position === 'GK')) {
+    const bi = bench.findIndex(p => p.position === 'GK');
+    if (bi >= 0) {
+      const gk = bench[bi];
+      bench[bi] = starters[0];
+      starters[0] = gk;
+    }
+  }
+  // keep exactly eleven on the field, spill the rest to the bench
+  while (starters.length > 11) bench.push(starters.pop()!);
+  while (starters.length < 11 && bench.length) starters.push(bench.shift()!);
+
+  return { squad: { starters, bench }, retired, risers, fallers, joined };
+}
+
+/**
+ * Bring a squad up to the legal minimum with youth, without ageing anyone. Used
+ * when the manager sold or let players go over the summer and walked into the
+ * season a man short: rather than block the marquee sale, we blood a youngster.
+ */
+export function fillWithYouth(squad: Squad, rng: Rng, tier: number, minSquad: number): { squad: Squad; joined: string[] } {
+  const starters = [...squad.starters];
+  const bench = [...squad.bench];
+  const used = new Set([...starters, ...bench].map(p => p.name));
+  const NEED: Player['position'][] = ['GK', 'CB', 'CM', 'ST', 'RW', 'LB'];
+  const joined: string[] = [];
+  let guard = 0;
+  while (starters.length + bench.length < minSquad && guard++ < 12) {
+    const missingGk = !starters.some(p => p.position === 'GK') && !bench.some(p => p.position === 'GK');
+    const pos = missingGk ? 'GK' : NEED[guard % NEED.length];
+    const kid = makePlayer(pos, leagueCeiling(tier) - 8, rng, undefined, used);
+    kid.age = 17 + Math.floor(rng() * 3);
+    used.add(kid.name);
+    joined.push(kid.name);
+    bench.push(kid);
+  }
+  if (!starters.some(p => p.position === 'GK')) {
+    const bi = bench.findIndex(p => p.position === 'GK');
+    if (bi >= 0) { const gk = bench[bi]; bench[bi] = starters[0]; starters[0] = gk; }
+  }
+  while (starters.length > 11) bench.push(starters.pop()!);
+  while (starters.length < 11 && bench.length) starters.push(bench.shift()!);
+  return { squad: { starters, bench }, joined };
+}
+
+/* ---------------------------------------------------------------- rewards */
+
+/** Season payout, it has to grow with the division or promotion bankrupts you. */
+export function seasonPurse(tier: number, position: number, teams: number, promoted = false): number {
+  const base = [0, 320_000, 700_000, 1_600_000, 3_600_000, 8_000_000][Math.min(tier, TOP_TIER)];
+  const share = 1 + (teams - position) * 0.12;   // finishing higher pays more
+  // going up brings sponsors and television money, which is what funds the
+  // rebuild you now urgently need for a division that is a level above you
+  const promotionBonus = promoted ? 2 : 1;
+  return Math.round(base * share * promotionBonus);
+}
+
+/** Per match prize, also scaled by division. */
+export function matchPrize(tier: number, result: 'W' | 'D' | 'L'): number {
+  const mul = [1, 1, 1.8, 3.2, 5.5, 9][Math.min(tier, TOP_TIER)];
+  const base = result === 'W' ? 90_000 : result === 'D' ? 40_000 : 18_000;
+  return Math.round(base * mul);
+}
+
+/**
+ * The wage bill for a season. Without this the prize money just piles up and
+ * every decision in the market becomes free, which is the fastest way to make
+ * an economy meaningless. Better players cost sharply more, so a bloated squad
+ * of veterans is a real problem you have to solve by selling.
+ */
+export function playerWage(p: Player): number {
+  return Math.round(Math.pow(overall(p), 2.2) * 5.5);
+}
+
+export function wageBill(squad: Squad): number {
+  return [...squad.starters, ...squad.bench].reduce((s, p) => s + playerWage(p), 0);
+}
+
+/* ------------------------------------------------------- running the club */
+
+/**
+ * What it costs to open the gates every week. Before this a season was pure
+ * income and the wage bill landed once, invisibly, in the summer, so money
+ * piled up and no decision in the market or in a dilemma ever hurt. Now every
+ * round is a financial event: a win roughly keeps you level, a draw bleeds, a
+ * defeat bleeds harder. The annual wage total is unchanged, it is simply paid
+ * weekly, where the manager can feel it.
+ */
+export const PITCH_UPKEEP = [0, 12_000, 22_000, 40_000, 70_000, 130_000];
+export const SECURITY_HOME = [0, 18_000, 32_000, 58_000, 100_000, 185_000];
+
+export interface RoundCosts {
+  wages: number;
+  pitch: number;
+  security: number;
+  total: number;
+}
+
+export function roundCosts(input: {
+  squad: Squad; tier: number; isHome: boolean; isDerby: boolean; rounds: number;
+}): RoundCosts {
+  const t = Math.max(0, Math.min(TOP_TIER, input.tier));
+  const wages = Math.round(wageBill(input.squad) / Math.max(1, input.rounds));
+  const pitch = PITCH_UPKEEP[t];
+  // stewards are only paid when you are the host, and a derby needs more of them
+  const security = input.isHome ? Math.round(SECURITY_HOME[t] * (input.isDerby ? 1.8 : 1)) : 0;
+  return { wages, pitch, security, total: wages + pitch + security };
+}
+
+/* -------------------------------------------------------------- the ground */
+
+/**
+ * The stadium. It grows with the club across seasons: money up front, more
+ * gate income later, and from ליגה א' up a division simply will not let you in
+ * without a ground that meets its minimum. Four photos by size band, so the
+ * place you look at actually changes as you climb.
+ */
+/** A few wooden benches by the touchline, which is exactly where a club starts. */
+export const STADIUM_START = 50;
+
+/** Minimum capacity a division demands. Below it you cannot be promoted into it. */
+const TIER_MIN: Record<number, number> = { 3: 5_000, 4: 10_000, 5: 18_000 };
+export function requiredCapacity(tier: number): number {
+  return TIER_MIN[tier] ?? 0;
+}
+
+/**
+ * Which stadium photo fits this capacity. Band 0 is the opening ground you
+ * start on, a few old benches you can walk onto, so the very first expansion
+ * already changes the place you look at.
+ */
+export function stadiumImageTier(capacity: number): 0 | 1 | 2 | 3 | 4 {
+  return capacity >= 15_000 ? 4 : capacity >= 5_000 ? 3 : capacity >= 1_000 ? 2 : capacity >= 150 ? 1 : 0;
+}
+
+/** Ticket price per seat, by division. */
+export function ticketPrice(tier: number): number {
+  return [0, 14, 22, 34, 52, 80][Math.max(0, Math.min(TOP_TIER, tier))];
+}
+
+/** Gate takings for a single home match. */
+export function gateIncome(capacity: number, fill: number, tier: number): number {
+  return Math.round(capacity * Math.max(0, Math.min(1, fill)) * ticketPrice(tier));
+}
+
+export interface ExpansionOption {
+  key: 'expand' | 'stand';
+  label: string;
+  addSeats: number;
+  cost: number;
+  rounds: number;
+}
+
+const round100 = (n: number) => Math.round(n / 100) * 100;
+
+/**
+ * The two building projects on offer, sized and priced to the division. In
+ * ליגה ג' this is genuinely small, a hundred seats bolted on or a three hundred
+ * seat stand, and it scales up sharply with every promotion so the ground can
+ * actually reach what the top divisions demand.
+ */
+export function expansionOptions(tier: number): ExpansionOption[] {
+  const t = Math.max(1, Math.min(TOP_TIER, tier));
+  const small = [0, 100, 600, 2_000, 4_000, 8_000][t];
+  const per = [0, 900, 500, 320, 300, 380][t];   // cost per seat, small builds carry overheads
+  const big = small * 3;
+  return [
+    { key: 'expand', label: 'הרחבת יציע', addSeats: small, cost: round100(small * per), rounds: 2 },
+    { key: 'stand', label: 'יציע חדש', addSeats: big, cost: round100(big * per * 1.08), rounds: 4 },
+  ];
+}
+
+/* ------------------------------------------------------------ the new year */
+
+export interface NextSeason {
+  clubs: Club[];
+  /** every squad in the new division, mine included */
+  squads: Record<string, Squad>;
+  report: Omit<SeasonReport, 'season'>;
+  seed: number;
+}
+
+/**
+ * An AI club doing its summer business. The squad ages like everyone else, then
+ * the club goes and replaces its weakest men to get back near the level the
+ * division demands. Without this the whole league would rot while only the
+ * manager rebuilds, and the ladder would be trivial after three seasons.
+ */
+function aiOffSeason(squad: Squad, rng: Rng, tier: number, minSquad: number): Squad {
+  const aged = ageSquad(squad, rng, tier, minSquad).squad;
+  const target = leagueCeiling(tier) - 5 + Math.round(rng() * 8);
+  const all = [...aged.starters, ...aged.bench];
+  const used = new Set(all.map(p => p.name));
+
+  // replace the weakest handful when the squad has slipped below the level
+  const weakest = [...all].sort((a, b) => overall(a) - overall(b));
+  const signings = 1 + Math.floor(rng() * 3);
+  for (let i = 0; i < signings; i++) {
+    const out = weakest[i];
+    if (!out) break;
+    if (overall(out) >= target - 2) break;
+    const inn = makePlayer(out.position, target, rng, undefined, used);
+    used.add(inn.name);
+    const si = aged.starters.findIndex(p => p.id === out.id);
+    if (si >= 0) aged.starters[si] = inn;
+    else {
+      const bi = aged.bench.findIndex(p => p.id === out.id);
+      if (bi >= 0) aged.bench[bi] = inn;
+    }
+  }
+  return aged;
+}
+
+/**
+ * Everything that happens between the final whistle of one season and the first
+ * whistle of the next: promotion or relegation, the squad a year older, the
+ * new division assembled around you.
+ */
+export function buildNextSeason(input: {
+  seasonSeed: number;
+  season: number;
+  tier: number;
+  myClub: Club;
+  myClubId: string;
+  /** every squad currently in the division, so the world persists */
+  squads: Record<string, Squad>;
+  position: number;
+  teams: number;
+  minSquad: number;
+  /** does the ground meet the division above's minimum, gating promotion */
+  stadiumOk: boolean;
+}): NextSeason {
+  const { tier, position, teams, myClubId } = input;
+  const wantsUp = position <= 2 && tier < TOP_TIER;
+  // a promotion earned on the pitch is denied if the ground is too small for
+  // the division above, whenever that division actually demands one
+  const blocked = wantsUp && requiredCapacity(tier + 1) > 0 && !input.stadiumOk;
+  const promoted = wantsUp && !blocked;
+  const champion = position === 1;
+  const relegated = position >= teams && tier > 1;
+
+  const result: SeasonResult = champion ? 'champion' : promoted ? 'promoted' : relegated ? 'relegated' : 'stayed';
+  const newTier = Math.max(1, Math.min(TOP_TIER, tier + (promoted ? 1 : 0) - (relegated ? 1 : 0)));
+
+  const seed = input.seasonSeed + input.season * 7919 + 13;
+  const rng = createRng(seed);
+
+  const aged = ageSquad(input.squads[myClubId], rng, newTier, input.minSquad);
+
+  // the division you walk into, with your club taking one of the places
+  const myClub: Club = { ...input.myClub, tier: newTier };
+  const others = poolForTier(newTier).filter(c => c.id !== myClub.id).slice(0, Math.max(1, teams - 1));
+  const clubs = [myClub, ...others];
+
+  // Everyone ages, nobody resets. A rival you already know keeps its squad and
+  // does its own business, a club you have never met gets a fresh one.
+  const squads: Record<string, Squad> = { [myClubId]: aged.squad };
+  for (const c of others) {
+    const existing = input.squads[c.id];
+    squads[c.id] = existing && newTier === tier
+      ? aiOffSeason(existing, rng, newTier, input.minSquad)
+      : makeSquad(leagueCeiling(newTier) - 5 + Math.round(rng() * 8), rng, c.traits);
+  }
+
+  return {
+    clubs,
+    squads,
+    seed,
+    report: {
+      tier, position, result, newTier,
+      purse: seasonPurse(tier, position, teams, promoted),
+      wages: wageBill(aged.squad),
+      retired: aged.retired,
+      risers: aged.risers.sort((a, b) => (b.to - b.from) - (a.to - a.from)).slice(0, 4),
+      fallers: aged.fallers.sort((a, b) => (a.to - a.from) - (b.to - b.from)).slice(0, 3),
+      joined: aged.joined,
+      promotionBlocked: blocked,
+    },
+  };
+}
+
+export { nextPlayerId };

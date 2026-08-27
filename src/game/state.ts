@@ -1,0 +1,1533 @@
+import type { Club } from '../data/clubs.ts';
+import type { ManagerId, ManagerType } from '../data/managers.ts';
+import { getManager } from '../data/managers.ts';
+import type { Squad } from '../data/squadGen.ts';
+import { playerValue } from '../data/squadGen.ts';
+import type { MatchResult, TeamInput, Approach, Press, Player } from '../engine/matchEngine.ts';
+import { simulateMatch, overall, createRng } from '../engine/matchEngine.ts';
+import type { LeagueState, Fixture } from './league.ts';
+import { initLeague, applyResult, sortedTable, buildFixtures, emptyTable } from './league.ts';
+import { LEAGUE_C, isDerby, LEAGUE_NAMES } from '../data/clubs.ts';
+import { TEMPLATES, eligible, rollDilemma } from '../data/dilemmas.ts';
+import type { RolledDilemma, DilemmaEffect, Ctx as DilemmaCtx } from '../data/dilemmas.ts';
+import { pickPressQuestion } from '../data/press.ts';
+import { pickTrigger, rollChat } from '../data/chats.ts';
+import type { RolledChat } from '../data/chats.ts';
+import { fanMessage } from '../data/fans.ts';
+import type { FanContext, FanMessage, FanTiming } from '../data/fans.ts';
+import type { Outlet, PressQuestion, PressContext } from '../data/press.ts';
+import type { FreeAgent } from './transfers.ts';
+import { makeMarket, windowState, sellPrice, contractTerms, MIN_SQUAD, MAX_SQUAD } from './transfers.ts';
+import {
+  PRE_ROUNDS, seedContract, contractYears, renewTerms, raiseBonus,
+  starTarget, starFee, youngTarget,
+} from './preseason.ts';
+import type { ChronicleEntry } from './chronicle.ts';
+import { chronicleAfterRound, chronicleAtSeasonEnd } from './chronicle.ts';
+import type { SeasonReport } from './career.ts';
+import {
+  buildNextSeason, matchPrize, roundCosts, fillWithYouth, TOP_TIER,
+  STADIUM_START, requiredCapacity, stadiumImageTier, gateIncome, expansionOptions,
+} from './career.ts';
+import type { RoundCosts, ExpansionOption } from './career.ts';
+
+export type Phase =
+  | 'onboard-manager' | 'onboard-club' | 'signing' | 'squad' | 'hub' | 'transfers'
+  | 'dilemma' | 'tactic' | 'match' | 'result' | 'press' | 'season-end' | 'chronicle'
+  | 'captain' | 'assistant' | 'preseason' | 'preseason-market' | 'inbox' | 'chat' | 'table' | 'stadium';
+
+export interface Meters { money: number; morale: number; prestige: number; }
+
+/** The home ground and any expansion currently under construction. */
+export interface StadiumProject { label: string; addSeats: number; roundsLeft: number; total: number; }
+export interface Stadium { capacity: number; project: StadiumProject | null; }
+/** A just finished build, to unveil the new ground on the result screen. */
+export interface StadiumReveal { image: number; capacity: number; addSeats: number; upgraded: boolean; }
+
+/** What the round earned and what it cost to run. */
+export interface RoundLedger extends RoundCosts { prize: number; gate: number; net: number; }
+export interface Tactic { approach: Approach; press: Press; }
+export interface RoundResult { homeId: string; awayId: string; hg: number; ag: number; }
+
+export interface ManagerProfile {
+  name: string;
+  nickname: string;
+  age: number;
+  type: ManagerId;
+}
+
+/**
+ * Who you turn out to be. Nobody picks this at the start, it is counted from
+ * the choices you actually make: backing the dressing room, playing the media,
+ * or protecting the budget. That makes the identity yours rather than a menu.
+ */
+/**
+ * A player's current season. Kept for EVERY player in the division, not just
+ * your squad, because a golden boot race with only your own strikers in it is
+ * not a race. Name and club are stored on the record so the charts render even
+ * after a player moves or retires.
+ */
+export interface PlayerSeason {
+  name: string;
+  clubId: string;
+  apps: number;
+  goals: number;
+  assists: number;
+  lastGoalWeek: number;   // 0 = never scored this season
+}
+
+/** One finished season on a player's record, so a card can show a history. */
+export interface CareerSeason {
+  season: number;
+  tier: number;
+  clubShort: string;
+  apps: number;
+  goals: number;
+  assists: number;
+}
+
+const blankSeason = (name = '', clubId = ''): PlayerSeason =>
+  ({ name, clubId, apps: 0, goals: 0, assists: 0, lastGoalWeek: 0 });
+
+export interface ManagerStyle {
+  players: number;   // sided with the squad
+  media: number;     // played the press and the standing
+  money: number;     // guarded the wallet
+}
+
+export function styleTitle(style: ManagerStyle): { title: string; note: string } {
+  const { players, media, money } = style;
+  const total = players + media + money;
+  if (total < 4) return { title: 'מאמן חדש', note: 'עוד לא הספיקו להכיר אותך' };
+  const top = Math.max(players, media, money);
+  if (top === players) return { title: 'איש של השחקנים', note: 'בחדר ההלבשה הולכים אחריך באש ובמים' };
+  if (top === media) return { title: 'איש התקשורת', note: 'אתה יודע לשחק את המשחק גם מחוץ למגרש' };
+  return { title: 'מנהל עם ראש על הכתפיים', note: 'לא זורק שקל, והבעלים מעריך את זה' };
+}
+
+export interface GameState {
+  phase: Phase;
+  seasonSeed: number;
+  clubId: string;
+  profile: ManagerProfile;
+  meters: Meters;
+  tactic: Tactic;
+  week: number;
+  league: LeagueState;
+  market: FreeAgent[];
+  dilemma: RolledDilemma | null;
+  dilemmaHistory: string[];
+  /** messages that can wait, read from the hub whenever you like */
+  inbox: RolledDilemma[];
+  /** the money in and out of the round just played, shown on the result screen */
+  lastLedger: RoundLedger | null;
+  /** the conversation waiting on the phone after a week worth talking about */
+  chat: RolledChat | null;
+  chatHistory: string[];
+  pendingOutcome: string | null;
+  lastPlayerMatch: MatchResult | null;
+  lastRound: RoundResult[];
+  press: { outlet: Outlet; q: PressQuestion } | null;
+  style: ManagerStyle;
+  /** per player season record for the whole division, drives the charts */
+  seasonStats: Record<string, PlayerSeason>;
+  /** finished seasons per player, so you can read a career off a card */
+  careerStats: Record<string, CareerSeason[]>;
+  form: ('W' | 'D' | 'L')[];   // most recent last
+  seasonOver: boolean;
+  /** Autobiography that writes itself, see chronicle.ts */
+  chronicle: ChronicleEntry[];
+  /** How many chronicle entries the manager has already looked at */
+  chronicleSeen: number;
+  /** recently shown fan line ids, so the terrace does not repeat itself */
+  fanHistory: string[];
+  /** which season of the career this is, 1 based */
+  season: number;
+  /** what happened last time the season rolled over, drives the summary screen */
+  lastReport: SeasonReport | null;
+  /** the armband. null means fall back to the highest ranked candidate */
+  captainId: string | null;
+  /** the assistant coach, all heart and no clue, see below */
+  assistant: Assistant;
+  /** the home ground, which grows with the club across seasons */
+  stadium: Stadium;
+  /** set the round a build opens, drives the unveil on the result screen */
+  stadiumReveal: StadiumReveal | null;
+  /** years left on each of my players' contracts, defaulted from a hash */
+  contracts: Record<string, number>;
+  /** which summer round we are on, 1..3, or 0 when the league is running */
+  preWeek: number;
+  /** pre season events already handled, so a saga does not reappear */
+  preResolved: string[];
+}
+
+/**
+ * The assistant coach. He loves football more than anyone and understands it
+ * less than the tea lady. His whole job is to agree with the manager and repeat
+ * the question back as if it were an answer. He never actually helps, and the
+ * day the club reaches ליגה א' he leaves to manage a team of his own.
+ */
+export interface Assistant {
+  hired: boolean;
+  name: string;
+  departed: boolean;
+}
+
+/** Tier at which the assistant graduates to a manager and leaves. */
+export const ASSISTANT_LEAVES_TIER = 3;   // ליגה א'
+
+const ASSISTANT_NAMES = ['שוקי', 'בוזי', 'ג׳קי', 'מוטי', 'ציון', 'פפו'];
+
+const START_MONEY = 400_000;
+
+/** Manager age changes how the dressing room and the boardroom treat you. */
+export function ageProfile(age: number) {
+  if (age <= 35) return { label: 'מאמן צעיר', note: 'קרוב לשחקנים, פחות כבוד מהמערכת', morale: +5, prestige: -6, youth: 1.15 };
+  if (age <= 49) return { label: 'בשיא הדרך', note: 'איזון בין ניסיון לאנרגיה', morale: 0, prestige: 0, youth: 1.0 };
+  return { label: 'מאמן ותיק', note: 'מכובד מאוד, פחות סבלנות מהצעירים', morale: -4, prestige: +8, youth: 0.9 };
+}
+
+export function newGame(seed = 12345): GameState {
+  return {
+    phase: 'onboard-manager',
+    seasonSeed: seed,
+    clubId: '',
+    profile: { name: '', nickname: '', age: 38, type: 'calm' },
+    meters: { money: START_MONEY, morale: 65, prestige: 30 },
+    tactic: { approach: 'balanced', press: 'mid' },
+    week: 1,
+    league: initLeague(LEAGUE_C, seed),
+    market: [],
+    dilemma: null,
+    dilemmaHistory: [],
+    inbox: [],
+    lastLedger: null,
+    chat: null,
+    chatHistory: [],
+    pendingOutcome: null,
+    lastPlayerMatch: null,
+    lastRound: [],
+    press: null,
+    style: { players: 0, media: 0, money: 0 },
+    seasonStats: {},
+    careerStats: {},
+    form: [],
+    seasonOver: false,
+    chronicle: [],
+    chronicleSeen: 0,
+    fanHistory: [],
+    season: 1,
+    lastReport: null,
+    captainId: null,
+    assistant: { hired: false, name: '', departed: false },
+    stadium: { capacity: STADIUM_START, project: null },
+    stadiumReveal: null,
+    contracts: {},
+    preWeek: 0,
+    preResolved: [],
+  };
+}
+
+export function club(gs: GameState): Club {
+  return gs.league.clubs.find(c => c.id === gs.clubId) ?? gs.league.clubs[0];
+}
+export function manager(gs: GameState): ManagerType {
+  return getManager(gs.profile.type);
+}
+export function mySquad(gs: GameState): Squad {
+  return gs.league.squads[gs.clubId];
+}
+export function playerFixture(gs: GameState): Fixture | null {
+  return gs.league.fixtures.find(f => f.round === gs.week && (f.homeId === gs.clubId || f.awayId === gs.clubId)) ?? null;
+}
+export function transferWindow(gs: GameState) {
+  // the market is always open during the pre season summer
+  if (gs.preWeek > 0) {
+    return { open: true, label: 'שוק הקיץ', weeksLeft: PRE_ROUNDS - gs.preWeek + 1, nextOpensWeek: null };
+  }
+  return windowState(gs.week, gs.league.rounds);
+}
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+/* ------------------------------------------------------------- onboarding */
+
+export function setProfile(gs: GameState, profile: ManagerProfile): GameState {
+  return { ...gs, profile, phase: 'onboard-club' };
+}
+
+/** Club choice sets the money, the prestige and the squad you inherit. */
+export function pickClub(gs: GameState, clubId: string): GameState {
+  const c = gs.league.clubs.find(x => x.id === clubId)!;
+  const m = getManager(gs.profile.type);
+  const ap = ageProfile(gs.profile.age);
+  const rng = createRng(gs.seasonSeed + 777);
+  const squad = gs.league.squads[clubId];
+  const takenNames = new Set([...squad.starters, ...squad.bench].map(p => p.name));
+  return {
+    ...gs,
+    clubId,
+    meters: {
+      money: Math.round(START_MONEY * m.budgetBias * c.traits.budget),
+      morale: clamp(65 + ap.morale, 0, 100),
+      prestige: clamp(c.traits.prestige + ap.prestige, 0, 100),
+    },
+    market: makeMarket(c.tier, rng, 10, takenNames),
+    phase: 'signing',
+  };
+}
+
+/** Signing done, now go and look at the squad you inherited. */
+export function afterSigning(gs: GameState, effect: { morale?: number; prestige?: number }): GameState {
+  return {
+    ...gs,
+    meters: {
+      money: gs.meters.money,
+      morale: clamp(gs.meters.morale + (effect.morale ?? 0), 0, 100),
+      prestige: clamp(gs.meters.prestige + (effect.prestige ?? 0), 0, 100),
+    },
+    style: scoreStyle(gs.style, effect),
+    phase: 'squad',
+  };
+}
+
+/* ------------------------------------------------------------- pre season */
+
+/**
+ * Open the summer. Runs once between seasons: every contract ticks down a year,
+ * the map is pruned to the men actually here, and any player new to us signs on
+ * fresh. From here the three market rounds play out before the league starts.
+ */
+export function enterPreseason(gs: GameState): GameState {
+  const sq = mySquad(gs);
+  const ids = [...sq.starters, ...sq.bench].map(p => p.id);
+  const firstEver = Object.keys(gs.contracts).length === 0;
+  const contracts: Record<string, number> = {};
+  for (const id of ids) {
+    if (id in gs.contracts) contracts[id] = clamp(gs.contracts[id] - 1, 0, 5);
+    else if (firstEver) contracts[id] = clamp(seedContract(id) - 1, 0, 5);  // opening squad, some out of deal
+    else contracts[id] = 3;   // a kid up from the youth signs a three year deal
+  }
+  return { ...gs, phase: 'preseason-market', preWeek: 1, preResolved: [], contracts, pendingOutcome: null };
+}
+
+/** Return to the summer board after a trip to the open market. No state moves. */
+export function backToPreseason(gs: GameState): GameState {
+  return { ...gs, phase: 'preseason-market', pendingOutcome: null };
+}
+
+/**
+ * Why the summer cannot be closed yet, or null when it can. Contracts are the
+ * one thing you are not allowed to walk past: leaving the window with men who
+ * have no deal would quietly cost you the squad, so the whistle waits until
+ * every expiring contract has been answered, renewed or released.
+ */
+export function preseasonBlockedReason(gs: GameState): string | null {
+  if (gs.preWeek < PRE_ROUNDS) return null;
+  const open = preseasonEvents(gs).filter(e => e.kind === 'renew');
+  if (!open.length) return null;
+  return open.length === 1
+    ? 'נשאר חוזה אחד לסגור לפני שהעונה מתחילה'
+    : `נשארו ${open.length} חוזים לסגור לפני שהעונה מתחילה`;
+}
+
+/** Advance one summer round, or kick the season off after the third. */
+export function advancePreseason(gs: GameState): GameState {
+  if (gs.preWeek >= PRE_ROUNDS) {
+    if (preseasonBlockedReason(gs)) return gs;   // contracts must be answered first
+    return finishPreseason(gs);
+  }
+  return { ...gs, preWeek: gs.preWeek + 1, pendingOutcome: null };
+}
+
+/**
+ * The whistle. Anyone still out of contract and not renewed now walks for free,
+ * but never below a legal squad, then the league begins.
+ */
+function finishPreseason(gs: GameState): GameState {
+  let next = gs;
+  const expiring = expiringPlayers(gs);
+  for (const p of expiring) {
+    if (squadSize(next) <= MIN_SQUAD) break;   // cannot gut the whole team
+    next = removePlayer(next, p.id);
+  }
+  // if summer sales left the squad short, blood youth up to a legal minimum
+  const contracts = { ...next.contracts };
+  if (squadSize(next) < MIN_SQUAD) {
+    const rng = createRng(gs.seasonSeed * 733 + gs.season * 97 + 5);
+    const filled = fillWithYouth(mySquad(next), rng, club(next).tier, MIN_SQUAD);
+    next = writeSquad(next, filled.squad);
+    for (const p of [...filled.squad.starters, ...filled.squad.bench]) {
+      if (!(p.id in contracts)) contracts[p.id] = 3;
+    }
+  }
+  // whoever we were forced to keep gets a bare one year deal so they are legal
+  for (const p of expiringPlayers({ ...next, contracts })) contracts[p.id] = 1;
+  return enterSeason({ ...next, contracts, preWeek: 0, preResolved: [], pendingOutcome: null });
+}
+
+export function enterSeason(gs: GameState): GameState {
+  return maybeAssistantDeparture({ ...gs, phase: 'hub' });
+}
+
+/* ------------------------------------------------- pre season, the business */
+
+export type PreEventKind = 'star' | 'young' | 'renew';
+
+export interface PreEvent {
+  id: string;
+  kind: PreEventKind;
+  player: Player;
+  /** the money attached: a suitor's fee, a raise, or a renewal bonus */
+  amount: number;
+}
+
+/** My players whose contract has run out this summer. */
+function expiringPlayers(gs: GameState): Player[] {
+  const sq = mySquad(gs);
+  return [...sq.starters, ...sq.bench].filter(p => contractYears(gs.contracts, p.id) <= 0);
+}
+
+/**
+ * What is on the manager's desk this summer round. Departure sagas surface in
+ * the first round, the out of contract men from the second, and everything
+ * stays until it is dealt with.
+ */
+export function preseasonEvents(gs: GameState): PreEvent[] {
+  const done = new Set(gs.preResolved);
+  const out: PreEvent[] = [];
+  const sq = mySquad(gs);
+
+  // a player caught in an unresolved saga is not also listed as a renewal, so
+  // one man never fills two cards at once
+  const inSaga = new Set<string>();
+  if (!done.has('dep-star') && club(gs).tier < TOP_TIER) {
+    const star = starTarget(sq);
+    if (star) { out.push({ id: 'dep-star', kind: 'star', player: star, amount: starFee(star) }); inSaga.add(star.id); }
+  }
+  if (!done.has('dep-young')) {
+    const young = youngTarget(sq);
+    if (young) { out.push({ id: 'dep-young', kind: 'young', player: young, amount: raiseBonus(young) }); inSaga.add(young.id); }
+  }
+  if (gs.preWeek >= 2) {
+    for (const p of expiringPlayers(gs)) {
+      if (inSaga.has(p.id)) continue;
+      if (!done.has(`renew-${p.id}`)) out.push({ id: `renew-${p.id}`, kind: 'renew', player: p, amount: renewTerms(p).signOn });
+    }
+  }
+  return out;
+}
+
+/** Remove a player from my squad entirely, keeping eleven on the field. */
+function removePlayer(gs: GameState, playerId: string): GameState {
+  const sq = mySquad(gs);
+  let starters = sq.starters.filter(p => p.id !== playerId);
+  let bench = sq.bench.filter(p => p.id !== playerId);
+  // if a starter left, pull the first bench player up so the eleven stays whole
+  if (starters.length < sq.starters.length && bench.length) {
+    const gone = sq.starters.find(p => p.id === playerId)!;
+    const idx = gone.position === 'GK'
+      ? bench.findIndex(p => p.position === 'GK')
+      : bench.findIndex(p => p.position !== 'GK');
+    const take = idx >= 0 ? idx : 0;
+    starters = [...starters, bench[take]];
+    bench = bench.filter((_, i) => i !== take);
+  }
+  const contracts = { ...gs.contracts };
+  delete contracts[playerId];
+  return { ...writeSquad(gs, { starters, bench }), contracts };
+}
+
+/**
+ * Answer a transfer saga. The star can be cashed in or kept, the kid can be
+ * given his raise or told to earn it. Every path lands an outcome bubble.
+ */
+export function resolveDeparture(gs: GameState, kind: 'star' | 'young', optionIndex: number): GameState {
+  const sq = mySquad(gs);
+  if (kind === 'star') {
+    const p = starTarget(sq);
+    if (!p) return gs;
+    const fee = starFee(p);
+    const resolved = [...gs.preResolved, 'dep-star'];
+    if (optionIndex === 0) {
+      // cash in: he gets his move, you get the money and a weaker team
+      const next = removePlayer(gs, p.id);
+      return {
+        ...next, preResolved: resolved,
+        meters: { ...gs.meters, money: gs.meters.money + fee, morale: clamp(gs.meters.morale + 2, 0, 100) },
+        style: scoreStyle(gs.style, { money: fee, morale: 2 }),
+        pendingOutcome: `${p.name} נמכר תמורת ${formatK(fee)}. הכסף בקופה, אבל הסגל איבד את השחקן הכי טוב שלו.`,
+      };
+    }
+    // block the move: he stays, the dressing room grumbles
+    return {
+      ...gs, preResolved: resolved,
+      meters: { ...gs.meters, morale: clamp(gs.meters.morale - 5, 0, 100) },
+      style: scoreStyle(gs.style, { morale: -5, prestige: 1 }),
+      pendingOutcome: `אמרת לא. ${p.name} נשאר, אבל הוא לא מרוצה והחדר הרגיש את זה.`,
+    };
+  }
+
+  const p = youngTarget(sq);
+  if (!p) return gs;
+  const resolved = [...gs.preResolved, 'dep-young'];
+  if (optionIndex === 0) {
+    // the raise: a loyalty bonus now, a longer deal, a happy kid
+    const bonus = raiseBonus(p);
+    const contracts = { ...gs.contracts, [p.id]: 3 };
+    return {
+      ...gs, preResolved: resolved, contracts,
+      meters: { ...gs.meters, money: Math.max(0, gs.meters.money - bonus), morale: clamp(gs.meters.morale + 4, 0, 100) },
+      style: scoreStyle(gs.style, { money: -bonus, morale: 4 }),
+      pendingOutcome: `${p.name} חתם חוזה חדש ומחייך. ${formatK(bonus)} מהקופה, אבל הכישרון נשאר בבית לשלוש שנים.`,
+    };
+  }
+  // refuse: saves the money, costs you the mood, and he remembers. He still
+  // sees out at least this season, so an already expired deal ticks up to one.
+  const kept = Math.max(1, contractYears(gs.contracts, p.id));
+  return {
+    ...gs, preResolved: resolved,
+    contracts: { ...gs.contracts, [p.id]: kept },
+    meters: { ...gs.meters, morale: clamp(gs.meters.morale - 4, 0, 100) },
+    style: scoreStyle(gs.style, { money: 1, morale: -4 }),
+    pendingOutcome: `סירבת להעלאה. ${p.name} בלע את זה, אבל הפעם הבאה שהחוזה שלו ייגמר, הוא כבר לא יבקש יפה.`,
+  };
+}
+
+/** Keep an out of contract player on a fresh deal. */
+export function renewContract(gs: GameState, playerId: string): GameState {
+  const sq = mySquad(gs);
+  const p = [...sq.starters, ...sq.bench].find(x => x.id === playerId);
+  if (!p) return gs;
+  const terms = renewTerms(p);
+  const contracts = { ...gs.contracts, [playerId]: terms.years };
+  return {
+    ...gs, contracts,
+    preResolved: [...gs.preResolved, `renew-${playerId}`],
+    meters: { ...gs.meters, money: Math.max(0, gs.meters.money - terms.signOn) },
+    pendingOutcome: `${p.name} חתם חוזה ל${terms.years === 1 ? 'עונה' : `${terms.years} עונות`}. ${formatK(terms.signOn)} דמי חתימה.`,
+  };
+}
+
+/** Let an out of contract player walk now instead of at the whistle. */
+export function releasePlayer(gs: GameState, playerId: string): GameState {
+  const sq = mySquad(gs);
+  if (squadSize(gs) <= MIN_SQUAD) {
+    return { ...gs, pendingOutcome: `אי אפשר לרדת מתחת ל-${MIN_SQUAD} שחקנים. תחתים מישהו קודם.` };
+  }
+  const p = [...sq.starters, ...sq.bench].find(x => x.id === playerId);
+  if (!p) return gs;
+  return {
+    ...removePlayer(gs, playerId),
+    preResolved: [...gs.preResolved, `renew-${playerId}`],
+    pendingOutcome: `${p.name} עוזב חופשי. חסכת את השכר, אבל הסגל מצטמצם.`,
+  };
+}
+
+/** Dismiss the outcome bubble on the pre season board. */
+export function clearPreseasonOutcome(gs: GameState): GameState {
+  return { ...gs, pendingOutcome: null };
+}
+
+/** Compact money label for the short outcome lines, e.g. 120K, 1.4M. */
+function formatK(n: number): string {
+  const a = Math.abs(n);
+  if (a >= 1_000_000) return `${(n / 1_000_000).toFixed(a % 1_000_000 === 0 ? 0 : 1)}M`;
+  if (a >= 1000) return `${Math.round(n / 1000)}K`;
+  return String(n);
+}
+
+/* -------------------------------------------------------------- the ground */
+
+export function openStadium(gs: GameState): GameState { return { ...gs, phase: 'stadium' }; }
+
+/** Which stadium photo is showing right now (0 is the opening ground). */
+export function stadiumImg(gs: GameState): 0 | 1 | 2 | 3 | 4 {
+  return stadiumImageTier(gs.stadium.capacity);
+}
+
+/** How full the ground gets, from standing, form and the occasion. */
+export function attendanceFill(gs: GameState, isDerby: boolean): number {
+  const recent = gs.form.slice(-3);
+  const formBump = recent.reduce((s, r) => s + (r === 'W' ? 0.03 : r === 'L' ? -0.02 : 0), 0);
+  const f = 0.5 + gs.meters.prestige / 250 + formBump + (isDerby ? 0.12 : 0);
+  return Math.max(0.35, Math.min(0.99, f));
+}
+
+/** A representative home gate, for showing on the stadium screen. */
+export function homeGateEstimate(gs: GameState): number {
+  return gateIncome(gs.stadium.capacity, attendanceFill(gs, false), club(gs).tier);
+}
+
+/** The promotion gate: what the division above wants, and whether we meet it. */
+export function stadiumGate(gs: GameState): { nextTier: number; need: number; meets: boolean } | null {
+  const t = club(gs).tier;
+  if (t >= TOP_TIER) return null;
+  const need = requiredCapacity(t + 1);
+  if (need <= 0) return null;
+  return { nextTier: t + 1, need, meets: gs.stadium.capacity >= need };
+}
+
+export function expansions(gs: GameState): ExpansionOption[] {
+  return expansionOptions(club(gs).tier);
+}
+
+/** Why an expansion cannot be started, or null when it can. */
+export function expansionBlockedReason(gs: GameState, opt: ExpansionOption): string | null {
+  if (gs.stadium.project) return 'כבר יש בנייה בתהליך';
+  if (gs.meters.money < opt.cost) return 'אין מספיק תקציב';
+  return null;
+}
+
+/** Commit money to a build. It finishes a few rounds later, in commitRound. */
+export function startStadiumProject(gs: GameState, key: ExpansionOption['key']): GameState {
+  const opt = expansions(gs).find(o => o.key === key);
+  if (!opt || expansionBlockedReason(gs, opt)) return gs;
+  return {
+    ...gs,
+    meters: { ...gs.meters, money: Math.max(0, gs.meters.money - opt.cost) },
+    stadium: {
+      capacity: gs.stadium.capacity,
+      project: { label: opt.label, addSeats: opt.addSeats, roundsLeft: opt.rounds, total: opt.rounds },
+    },
+  };
+}
+
+/** Move a build one round on. Returns the ground, a chronicle, and an unveil. */
+function advanceStadium(gs: GameState): { stadium: Stadium; done: ChronicleEntry | null; reveal: StadiumReveal | null } {
+  const p = gs.stadium.project;
+  if (!p) return { stadium: gs.stadium, done: null, reveal: null };
+  if (p.roundsLeft > 1) {
+    return { stadium: { ...gs.stadium, project: { ...p, roundsLeft: p.roundsLeft - 1 } }, done: null, reveal: null };
+  }
+  const capacity = gs.stadium.capacity + p.addSeats;
+  const upgraded = stadiumImageTier(capacity) !== stadiumImageTier(gs.stadium.capacity);
+  const id = `stadium-${capacity}`;
+  const done: ChronicleEntry | null = gs.chronicle.some(e => e.id === id) ? null : {
+    id, kind: 'season_end', week: gs.week, icon: 'flag', tint: 'gold',
+    title: 'האצטדיון גדל',
+    body: `הבנייה הסתיימה. הקיבולת עלתה ל${capacity.toLocaleString('en-US')} מקומות, ועוד אוהדים אומרים שהם ישמעו יותר טוב מעכשיו.`,
+  };
+  const reveal: StadiumReveal = { image: stadiumImageTier(capacity), capacity, addSeats: p.addSeats, upgraded };
+  return { stadium: { capacity, project: null }, done, reveal };
+}
+
+/** The player closed the stadium unveil overlay. */
+export function clearStadiumReveal(gs: GameState): GameState {
+  return { ...gs, stadiumReveal: null };
+}
+export function openSquad(gs: GameState): GameState {
+  return { ...gs, phase: 'squad' };
+}
+export function openTransfers(gs: GameState): GameState {
+  return { ...gs, phase: 'transfers' };
+}
+export function backToHub(gs: GameState): GameState {
+  return { ...gs, phase: 'hub' };
+}
+
+/* ---------------------------------------------------------- squad editing */
+
+function writeSquad(gs: GameState, squad: Squad): GameState {
+  return {
+    ...gs,
+    league: { ...gs.league, squads: { ...gs.league.squads, [gs.clubId]: squad } },
+  };
+}
+
+/** Why a swap is not allowed, or null when it is fine. */
+export function swapBlockedReason(a: Player, b: Player): string | null {
+  const aGk = a.position === 'GK', bGk = b.position === 'GK';
+  if (aGk !== bGk) return 'שוער יכול להתחלף רק בשוער';
+  return null;
+}
+
+/** Move a starter to the bench and a bench player into the XI. */
+export function swapPlayers(gs: GameState, starterId: string, benchId: string): GameState {
+  const sq = mySquad(gs);
+  const si = sq.starters.findIndex(p => p.id === starterId);
+  const bi = sq.bench.findIndex(p => p.id === benchId);
+  if (si < 0 || bi < 0) return gs;
+  if (swapBlockedReason(sq.starters[si], sq.bench[bi])) return gs;
+
+  const starters = [...sq.starters];
+  const bench = [...sq.bench];
+  const tmp = starters[si];
+  starters[si] = bench[bi];
+  bench[bi] = tmp;
+  return writeSquad(gs, { starters, bench });
+}
+
+/* ------------------------------------------------------------- transfers */
+
+export function squadSize(gs: GameState): number {
+  const sq = mySquad(gs);
+  return sq.starters.length + sq.bench.length;
+}
+
+export function signBlockedReason(gs: GameState, fa: FreeAgent): string | null {
+  if (!transferWindow(gs).open) return 'החלון סגור';
+  if (gs.meters.money < fa.fee) return 'אין מספיק תקציב';
+  if (squadSize(gs) >= MAX_SQUAD) return `הסגל מלא, מקסימום ${MAX_SQUAD} שחקנים`;
+  return null;
+}
+
+export function signPlayer(gs: GameState, playerId: string): GameState {
+  const fa = gs.market.find(f => f.player.id === playerId);
+  if (!fa || signBlockedReason(gs, fa)) return gs;
+  const sq = mySquad(gs);
+  const next = writeSquad(gs, { starters: sq.starters, bench: [...sq.bench, fa.player] });
+  return {
+    ...next,
+    meters: { ...gs.meters, money: gs.meters.money - fa.fee },
+    market: gs.market.filter(f => f.player.id !== playerId),
+    contracts: { ...gs.contracts, [fa.player.id]: contractTerms(fa).years },
+  };
+}
+
+export function sellBlockedReason(gs: GameState): string | null {
+  if (!transferWindow(gs).open) return 'החלון סגור';
+  if (squadSize(gs) <= MIN_SQUAD) return `אי אפשר לרדת מתחת ל-${MIN_SQUAD} שחקנים`;
+  return null;
+}
+
+/** Only bench players can be sold, starters must be swapped out first. */
+export function sellPlayer(gs: GameState, playerId: string): GameState {
+  if (sellBlockedReason(gs)) return gs;
+  const sq = mySquad(gs);
+  const p = sq.bench.find(x => x.id === playerId);
+  if (!p) return gs;
+  const next = writeSquad(gs, { starters: sq.starters, bench: sq.bench.filter(x => x.id !== playerId) });
+  return {
+    ...next,
+    meters: { ...gs.meters, money: gs.meters.money + sellPrice(p) },
+  };
+}
+
+export { playerValue, sellPrice, MIN_SQUAD, MAX_SQUAD };
+
+/* ---------------------------------------------------------------- the captain */
+
+/**
+ * Captaincy score. The armband goes to standing, which here is quality plus the
+ * years a player has on him. Pure and explainable, no hidden dice.
+ */
+export function captainScore(p: Player): number {
+  const seniority = Math.min(14, Math.max(0, p.age - 21)) * 0.9;
+  return overall(p) + seniority;
+}
+
+/** The whole squad, best captaincy candidate first. */
+export function captainCandidates(gs: GameState): Player[] {
+  const sq = mySquad(gs);
+  return [...sq.starters, ...sq.bench].sort((a, b) => captainScore(b) - captainScore(a));
+}
+
+/** Who wears the armband. Falls back to the top candidate when unset. */
+export function currentCaptainId(gs: GameState): string | null {
+  if (gs.captainId && captainCandidates(gs).some(p => p.id === gs.captainId)) return gs.captainId;
+  return captainCandidates(gs)[0]?.id ?? null;
+}
+
+export function captain(gs: GameState): Player | null {
+  const id = currentCaptainId(gs);
+  const sq = mySquad(gs);
+  return [...sq.starters, ...sq.bench].find(p => p.id === id) ?? null;
+}
+
+export function setCaptain(gs: GameState, playerId: string): GameState {
+  return { ...gs, captainId: playerId };
+}
+
+/* -------------------------------------------------------------- the assistant */
+
+/** Hire the assistant coach, a permanent source of useless encouragement. */
+export function hireAssistant(gs: GameState): GameState {
+  if (gs.assistant.hired) return gs;
+  const rng = createRng(gs.seasonSeed * 53 + 17);
+  const name = ASSISTANT_NAMES[Math.floor(rng() * ASSISTANT_NAMES.length)];
+  return { ...gs, assistant: { hired: true, name, departed: false } };
+}
+
+export function fireAssistant(gs: GameState): GameState {
+  return { ...gs, assistant: { hired: false, name: '', departed: false } };
+}
+
+/** Is the assistant around to chip in right now. */
+export function assistantActive(gs: GameState): boolean {
+  return gs.assistant.hired && !gs.assistant.departed;
+}
+
+/**
+ * When the club reaches ליגה א' the assistant is finally offered a job of his
+ * own, and off he goes, still not knowing his 4-4-2 from his elbow. Records the
+ * goodbye in the chronicle. No-op until the club actually climbs that high.
+ */
+export function maybeAssistantDeparture(gs: GameState): GameState {
+  if (!gs.assistant.hired || gs.assistant.departed) return gs;
+  if (club(gs).tier < ASSISTANT_LEAVES_TIER) return gs;
+  const id = `assistant-left-t${club(gs).tier}`;
+  if (gs.chronicle.some(e => e.id === id)) return gs;
+  const entry: ChronicleEntry = {
+    id, kind: 'season_end', week: gs.week, icon: 'handshake', tint: 'gold',
+    title: `${gs.assistant.name} עוזב לנהל`,
+    body: `הגענו לליגה א׳, ו${gs.assistant.name} קיבל הצעה לנהל קבוצה משלו. הוא לא הבין אף פעם כלום מהמשחק, אבל אהב אותו יותר מכולם. בהצלחה, אלוף.`,
+  };
+  return {
+    ...gs,
+    assistant: { ...gs.assistant, departed: true },
+    chronicle: [...gs.chronicle, entry],
+  };
+}
+
+/**
+ * The assistant's contribution to any choice: he repeats it back to you. Give
+ * him the option labels, he hands you the same options dressed as advice.
+ */
+export function assistantEcho(gs: GameState, options: string[], salt = 0): string | null {
+  if (!assistantActive(gs) || options.length < 2) return null;
+  const a = options[0], b = options[1];
+  const lines = [
+    `אני אומר לך בלב שלם, או ${a} או ${b}. אחד מהם בטוח נכון.`,
+    `תשמע, לדעתי ${a}. אבל גם ${b}, אה? קשה להגיד.`,
+    `המספרים לא משקרים, אחי. או ${a} או ${b}.`,
+    `אתה המאמן, אבל אני הייתי הולך על ${a}. או ${b}, תלוי איך אתה מרגיש.`,
+    `יש לי הרגשה ממש טובה על ${a}. או ${b}. הרגשה זה הכל.`,
+    `וואי איזו התלבטות. ${a}? ${b}? שתיהן אש. תבחר אתה.`,
+  ];
+  const rng = createRng(gs.seasonSeed * 131 + gs.week * 7 + salt);
+  return lines[Math.floor(rng() * lines.length)];
+}
+
+/* ---------------------------------------------------------------- the fans */
+
+/** Build what the terrace regulars actually know about right now. */
+export function fanContext(gs: GameState, timing: FanTiming): FanContext {
+  const fx = playerFixture(gs);
+  const iAmHome = fx ? fx.homeId === gs.clubId : true;
+  const oppId = fx ? (iAmHome ? fx.awayId : fx.homeId) : gs.clubId;
+  const rival = gs.league.clubs.find(c => c.id === oppId)?.short ?? 'היריבה';
+  const sq = mySquad(gs);
+
+  // a forward who has not scored for a while
+  let coldStriker: string | null = null;
+  let coldWeeks = 0;
+  const forwards = sq.starters.filter(p => ['ST', 'LW', 'RW', 'CAM'].includes(p.position));
+  for (const p of forwards) {
+    const rec = gs.seasonStats[p.id];
+    const since = rec?.lastGoalWeek ? gs.week - rec.lastGoalWeek : (rec?.apps ?? 0);
+    if (since > coldWeeks) { coldWeeks = since; coldStriker = p.name; }
+  }
+
+  const kid = sq.bench.concat(sq.starters).find(p => p.age <= 20);
+  const table = sortedTable(gs.league);
+  const tablePos = Math.max(1, table.findIndex(s => s.clubId === gs.clubId) + 1);
+
+  let streak = 0;
+  for (let i = gs.form.length - 1; i >= 0 && gs.form[i] === 'L'; i--) streak++;
+
+  const ctx: FanContext = {
+    timing, isDerby: fx ? isDerby(fx.homeId, fx.awayId) : false,
+    isHome: iAmHome, rival,
+    coldStriker, coldWeeks,
+    youngster: kid?.name ?? null,
+    approach: gs.tactic.approach,
+    tablePos, totalTeams: gs.league.clubs.length,
+    streak,
+  };
+
+  if (timing === 'post' && gs.lastPlayerMatch) {
+    const r = gs.lastPlayerMatch;
+    const my = iAmHome ? r.score[0] : r.score[1];
+    const opp = iAmHome ? r.score[1] : r.score[0];
+    ctx.result = my > opp ? 'win' : my === opp ? 'draw' : 'loss';
+    ctx.scoreLine = `${my}:${opp}`;
+    const myGoal = r.events.find(e => (e.type === 'goal' || e.type === 'penalty_goal') && e.teamId === gs.clubId);
+    ctx.scorer = myGoal?.playerName ?? null;
+  }
+  return ctx;
+}
+
+/** How many recent fan lines to remember, so the terrace stops repeating. */
+export const FAN_HISTORY = 16;
+
+/** The message shown this week, stable for a given week and timing. */
+export function fanNote(gs: GameState, timing: FanTiming): FanMessage {
+  const seed = gs.seasonSeed * 977 + gs.week * 41 + (timing === 'pre' ? 1 : 2);
+  return fanMessage(fanContext(gs, timing), createRng(seed), gs.fanHistory);
+}
+
+/* ------------------------------------------------------------- scouting */
+
+export interface Scout {
+  oppShort: string;
+  mine: number;
+  opp: number;
+  iAmHome: boolean;
+  /** who the bookies would back */
+  verdict: 'favourite' | 'even' | 'underdog';
+  /** a plain read for the manager, tuned to the matchup */
+  line: string;
+}
+
+function avgStarterOvr(sq: Squad): number {
+  const xs = sq.starters.map(overall);
+  return xs.reduce((s, x) => s + x, 0) / (xs.length || 1);
+}
+
+/** What we know about this week's opponent, shown before picking a tactic. */
+export function matchupScout(gs: GameState): Scout | null {
+  const fx = playerFixture(gs);
+  if (!fx) return null;
+  const iAmHome = fx.homeId === gs.clubId;
+  const oppId = iAmHome ? fx.awayId : fx.homeId;
+  const oppClub = gs.league.clubs.find(c => c.id === oppId)!;
+  const mine = avgStarterOvr(mySquad(gs));
+  const opp = avgStarterOvr(gs.league.squads[oppId]);
+  // a home game is worth roughly a couple of rating points on the read
+  const edge = (mine - opp) + (iAmHome ? 2 : -1);
+  const verdict: Scout['verdict'] = edge >= 4 ? 'favourite' : edge <= -4 ? 'underdog' : 'even';
+
+  const line =
+    verdict === 'favourite'
+      ? 'על הנייר אתם חזקים יותר. אל תתנו להם להתארגן, אבל אל תיפתחו מטומטם.'
+      : verdict === 'underdog'
+        ? 'הם חזקים מכם. משחק התקפי מדי מול קבוצה כזאת ייגמר רע, שקול להיסגר ולתפוס מהמעבר.'
+        : 'מאבק שקול. הפרטים יכריעו, טקטיקה נכונה ורגע אחד.';
+
+  return { oppShort: oppClub.short, mine: Math.round(mine), opp: Math.round(opp), iAmHome, verdict, line };
+}
+
+/* --------------------------------------------------------------- the week */
+
+function topPlayerName(sq: Squad): string {
+  const best = [...sq.starters].sort((a, b) => overall(b) - overall(a))[0];
+  return best.name.split(' ').slice(-1)[0];
+}
+
+const FORWARD = new Set(['ST', 'CF', 'SS', 'LW', 'RW']);
+const surname = (n: string) => n.split(' ').slice(-1)[0];
+
+/**
+ * The facts a dilemma is allowed to know about you. Everything here comes from
+ * the live save, so the reserve who corners you really is the man you have not
+ * picked, and the table position he quotes is the one on your screen.
+ */
+function dilemmaCtx(gs: GameState, star: string, rivalShort: string, rivalId: string): DilemmaCtx {
+  const sq = mySquad(gs);
+  const all = [...sq.starters, ...sq.bench];
+  const apps = (p: Player) => gs.seasonStats[p.id]?.apps ?? 0;
+  const goals = (p: Player) => gs.seasonStats[p.id]?.goals ?? 0;
+
+  // the forgotten man: fewest appearances, bench first, oldest as the tie break
+  const forgotten = [...sq.bench, ...sq.starters]
+    .sort((a, b) => apps(a) - apps(b) || b.age - a.age)[0];
+  const kid = all.filter(p => p.age <= 20).sort((a, b) => overall(b) - overall(a))[0];
+  const old = all.filter(p => p.age >= 32).sort((a, b) => b.age - a.age)[0];
+  const scorer = [...all].sort((a, b) => goals(b) - goals(a))[0];
+  const drought = all
+    .filter(p => FORWARD.has(p.position) && goals(p) === 0 && apps(p) >= 3)
+    .sort((a, b) => apps(b) - apps(a))[0];
+
+  const table = sortedTable(gs.league);
+  const pos = Math.max(1, table.findIndex(t => t.clubId === gs.clubId) + 1);
+
+  return {
+    star, rival: rivalShort, club: club(gs).short, money: gs.meters.money,
+    benched: forgotten && apps(forgotten) <= 1 ? surname(forgotten.name) : '',
+    benchedApps: forgotten ? apps(forgotten) : 0,
+    youngster: kid ? surname(kid.name) : '',
+    veteranName: old ? surname(old.name) : '',
+    scorer: scorer && goals(scorer) > 0 ? surname(scorer.name) : '',
+    dry: drought ? surname(drought.name) : '',
+    pos, teams: gs.league.clubs.length,
+    week: gs.week,
+    isDerby: isDerby(gs.clubId, rivalId),
+  };
+}
+
+export function startWeek(gs: GameState): GameState {
+  const fx = playerFixture(gs);
+  const rivalId = fx ? (fx.homeId === gs.clubId ? fx.awayId : fx.homeId) : gs.clubId;
+  const rival = gs.league.clubs.find(c => c.id === rivalId)!;
+  const myClub = club(gs);
+  const star = topPlayerName(mySquad(gs));
+  const rng = createRng(gs.seasonSeed * 100 + gs.week * 7 + 3);
+
+  // only templates that fit the live save, then a long cooldown so a season
+  // of rounds keeps surfacing something you have not seen yet
+  const ctx = dilemmaCtx(gs, star, rival.short, rivalId);
+  const recent = new Set(gs.dilemmaHistory.slice(-8));
+  const pick = (kind: 'now' | 'inbox'): RolledDilemma | null => {
+    const fits = eligible(ctx, kind);
+    if (!fits.length) return null;
+    const fresh = fits.filter(t => !recent.has(t.id));
+    const source = fresh.length ? fresh : fits;
+    return rollDilemma(source[Math.floor(rng() * source.length)], ctx, rng);
+  };
+
+  // the blocking one is about the match you are walking into
+  const urgent = pick('now')
+    ?? rollDilemma(TEMPLATES[Math.floor(rng() * TEMPLATES.length)], ctx, rng);
+
+  // and something that can wait lands in the inbox, capped so it never piles up
+  const inbox = [...gs.inbox];
+  if (inbox.length < INBOX_CAP && rng() < 0.6) {
+    const waiting = pick('inbox');
+    if (waiting && !inbox.some(m => m.id === waiting.id)) inbox.push(waiting);
+  }
+
+  // remember the pre match line the hub just showed, so it will not come round
+  // again for a while
+  const fanHistory = [...gs.fanHistory, fanNote(gs, 'pre').id].slice(-FAN_HISTORY);
+
+  return { ...gs, phase: 'dilemma', dilemma: urgent, inbox, fanHistory };
+}
+
+export function chooseDilemma(gs: GameState, optionIndex: number): GameState {
+  if (!gs.dilemma) return gs;
+  const opt = gs.dilemma.options[optionIndex];
+  const e: DilemmaEffect = opt.effect;
+  return {
+    ...gs,
+    meters: {
+      money: gs.meters.money + (e.money ?? 0),
+      morale: clamp(gs.meters.morale + (e.morale ?? 0), 0, 100),
+      prestige: clamp(gs.meters.prestige + (e.prestige ?? 0), 0, 100),
+    },
+    pendingOutcome: opt.outcome,
+    style: scoreStyle(gs.style, e),
+    dilemmaHistory: [...gs.dilemmaHistory, gs.dilemma.id],
+  };
+}
+
+export function toTactic(gs: GameState): GameState {
+  return { ...gs, phase: 'tactic', dilemma: null, pendingOutcome: null };
+}
+
+/* ------------------------------------------------------------- the inbox */
+
+export const INBOX_CAP = 3;
+
+export function openInbox(gs: GameState): GameState {
+  return { ...gs, phase: 'inbox', pendingOutcome: null };
+}
+export function closeInbox(gs: GameState): GameState {
+  return { ...gs, phase: 'hub', pendingOutcome: null };
+}
+
+/** Answer a message that was waiting. Same weight as a matchday dilemma. */
+export function answerInbox(gs: GameState, itemIndex: number, optionIndex: number): GameState {
+  const item = gs.inbox[itemIndex];
+  if (!item) return gs;
+  const opt = item.options[optionIndex];
+  if (!opt) return gs;
+  const e: DilemmaEffect = opt.effect;
+  return {
+    ...gs,
+    meters: {
+      money: gs.meters.money + (e.money ?? 0),
+      morale: clamp(gs.meters.morale + (e.morale ?? 0), 0, 100),
+      prestige: clamp(gs.meters.prestige + (e.prestige ?? 0), 0, 100),
+    },
+    pendingOutcome: opt.outcome,
+    style: scoreStyle(gs.style, e),
+    dilemmaHistory: [...gs.dilemmaHistory, item.id],
+    inbox: gs.inbox.filter((_, i) => i !== itemIndex),
+  };
+}
+
+/** Dismiss the outcome bubble and go back to the list. */
+export function clearInboxOutcome(gs: GameState): GameState {
+  return { ...gs, pendingOutcome: null };
+}
+export function setTactic(gs: GameState, tactic: Tactic): GameState {
+  return { ...gs, tactic };
+}
+
+/* --------------------------------------------------------------- the match */
+
+function teamInput(gs: GameState, clubId: string, isHome: boolean, tactic?: Tactic): TeamInput {
+  const sq = gs.league.squads[clubId];
+  const c = gs.league.clubs.find(x => x.id === clubId)!;
+  const players: Player[] = sq.starters.map(p => ({ ...p }));
+  const t = tactic ?? { approach: 'balanced' as Approach, press: 'mid' as Press };
+  if (clubId === gs.clubId) {
+    const bias = (gs.meters.morale - 65) / 100;
+    players.forEach(p => { p.morale = clamp(p.morale + bias * 20, 0, 100); });
+  }
+  return {
+    id: clubId, name: c.name, players,
+    tactic: { formation: '4-3-3', approach: t.approach, press: t.press },
+    chemistry: 0.7, isHome,
+  };
+}
+
+export function simulatePlayerMatch(gs: GameState, momentPick: number | null): MatchResult {
+  const fx = playerFixture(gs)!;
+  const seedBase = gs.seasonSeed * 1000 + gs.week * 17 + (momentPick ?? 0) * 3;
+  const home = fx.homeId === gs.clubId ? teamInput(gs, fx.homeId, true, gs.tactic) : teamInput(gs, fx.homeId, true);
+  const away = fx.awayId === gs.clubId ? teamInput(gs, fx.awayId, false, gs.tactic) : teamInput(gs, fx.awayId, false);
+  return simulateMatch(home, away, seedBase);
+}
+
+/** Everything the live match engine needs to start from the current state. */
+export function liveMatchInput(gs: GameState) {
+  const fx = playerFixture(gs)!;
+  const iAmHome = fx.homeId === gs.clubId;
+  const oppId = iAmHome ? fx.awayId : fx.homeId;
+  const mine = mySquad(gs);
+  const opp = gs.league.squads[oppId];
+  const homeClub = gs.league.clubs.find(c => c.id === fx.homeId)!;
+  const awayClub = gs.league.clubs.find(c => c.id === fx.awayId)!;
+  return {
+    seed: gs.seasonSeed * 1000 + gs.week * 17,
+    homeId: fx.homeId, homeName: homeClub.name,
+    awayId: fx.awayId, awayName: awayClub.name,
+    iAmHome,
+    playerStarters: mine.starters, playerBench: mine.bench, playerTactic: gs.tactic,
+    oppStarters: opp.starters, oppBench: opp.bench,
+    moraleBias: (gs.meters.morale - 65) / 100,
+    captainId: currentCaptainId(gs),
+  };
+}
+
+export function commitRound(gs: GameState, playerResult: MatchResult): GameState {
+  const fx = playerFixture(gs)!;
+  const table = cloneTable(gs.league.table);
+  const roundResults: RoundResult[] = [];
+
+  applyResult(table, fx.homeId, fx.awayId, playerResult.score[0], playerResult.score[1]);
+  roundResults.push({ homeId: fx.homeId, awayId: fx.awayId, hg: playerResult.score[0], ag: playerResult.score[1] });
+
+  // the whole division's season record, so the scoring charts are a real race
+  const seasonStats: Record<string, PlayerSeason> = {};
+  for (const k of Object.keys(gs.seasonStats)) seasonStats[k] = { ...gs.seasonStats[k] };
+
+  const rec = (id: string, name: string, clubId: string): PlayerSeason => {
+    const r = seasonStats[id] ?? blankSeason(name, clubId);
+    if (!r.name) r.name = name;
+    if (!r.clubId) r.clubId = clubId;
+    seasonStats[id] = r;
+    return r;
+  };
+  /** everyone who started gets an appearance, goals and assists come off events */
+  const logMatch = (homeId: string, awayId: string, events: { type: string; teamId: string; playerId?: string; playerName?: string; assistId?: string; assistName?: string }[]) => {
+    for (const cid of [homeId, awayId]) {
+      for (const p of gs.league.squads[cid]?.starters ?? []) rec(p.id, p.name, cid).apps += 1;
+    }
+    for (const e of events) {
+      if (e.type !== 'goal' && e.type !== 'penalty_goal') continue;
+      if (e.playerId) {
+        const r = rec(e.playerId, e.playerName ?? '', e.teamId);
+        r.goals += 1;
+        r.lastGoalWeek = gs.week;
+      }
+      if (e.assistId) rec(e.assistId, e.assistName ?? '', e.teamId).assists += 1;
+    }
+  };
+
+  logMatch(fx.homeId, fx.awayId, playerResult.events);
+
+  const others = gs.league.fixtures.filter(f =>
+    f.round === gs.week && f.homeId !== gs.clubId && f.awayId !== gs.clubId);
+  for (const f of others) {
+    const r = simulateMatch(
+      teamInput(gs, f.homeId, true), teamInput(gs, f.awayId, false),
+      gs.seasonSeed * 1000 + gs.week * 17 + hashPair(f.homeId, f.awayId),
+    );
+    applyResult(table, f.homeId, f.awayId, r.score[0], r.score[1]);
+    roundResults.push({ homeId: f.homeId, awayId: f.awayId, hg: r.score[0], ag: r.score[1] });
+    logMatch(f.homeId, f.awayId, r.events);
+  }
+
+  const iAmHome = fx.homeId === gs.clubId;
+  const myGoals = iAmHome ? playerResult.score[0] : playerResult.score[1];
+  const oppGoals = iAmHome ? playerResult.score[1] : playerResult.score[0];
+  const won = myGoals > oppGoals, draw = myGoals === oppGoals;
+  const m = getManager(gs.profile.type);
+  const prize = matchPrize(club(gs).tier, won ? 'W' : draw ? 'D' : 'L');
+  const moraleDelta = (won ? +6 : draw ? 0 : -5) + m.moraleBias;
+
+  const derby = isDerby(fx.homeId, fx.awayId);
+  // the week also costs money to run, so a result is a real financial event
+  const costs = roundCosts({
+    squad: mySquad(gs), tier: club(gs).tier, isHome: iAmHome,
+    isDerby: derby, rounds: gs.league.rounds,
+  });
+  // a home crowd pays at the gate, the reward for a bigger ground
+  const gate = iAmHome ? gateIncome(gs.stadium.capacity, attendanceFill(gs, derby), club(gs).tier) : 0;
+  // any build in progress moves a round closer to opening
+  const built = advanceStadium(gs);
+
+  const nextBase: GameState = {
+    ...gs,
+    phase: 'result',
+    lastLedger: { prize, gate, ...costs, net: prize + gate - costs.total },
+    meters: {
+      money: Math.max(0, gs.meters.money + prize + gate - costs.total),
+      morale: clamp(gs.meters.morale + moraleDelta, 0, 100),
+      prestige: clamp(gs.meters.prestige + (won ? 2 : draw ? 0 : -1), 0, 100),
+    },
+    league: { ...gs.league, table },
+    stadium: built.stadium,
+    stadiumReveal: built.reveal,
+    lastPlayerMatch: playerResult,
+    lastRound: roundResults,
+    seasonStats,
+    form: [...gs.form, won ? 'W' : draw ? 'D' : 'L'].slice(-6) as ('W'|'D'|'L')[],
+    seasonOver: gs.week + 1 > gs.league.rounds,
+  };
+
+  const newEntries = chronicleAfterRound(gs, nextBase, playerResult);
+  const extra = built.done ? [built.done, ...newEntries] : newEntries;
+  return extra.length ? { ...nextBase, chronicle: [...nextBase.chronicle, ...extra] } : nextBase;
+}
+
+/** From the result screen, the reporter is waiting outside. */
+export function continueFromResult(gs: GameState): GameState {
+  gs = { ...gs, stadiumReveal: null };   // the unveil has had its moment
+  const r = gs.lastPlayerMatch;
+  const fx = playerFixture(gs);
+  if (!r || !fx) return advancePastPress(gs);
+
+  const iAmHome = fx.homeId === gs.clubId;
+  const myGoals = iAmHome ? r.score[0] : r.score[1];
+  const oppGoals = iAmHome ? r.score[1] : r.score[0];
+  const margin = myGoals - oppGoals;
+  const result: PressContext['result'] =
+    margin >= 3 ? 'big_win' : margin > 0 ? 'win' : margin === 0 ? 'draw' : margin <= -3 ? 'thrashing' : 'loss';
+
+  const table = sortedTable(gs.league);
+  const tablePos = table.findIndex(s => s.clubId === gs.clubId) + 1;
+  const oppId = iAmHome ? fx.awayId : fx.homeId;
+  const rival = gs.league.clubs.find(c => c.id === oppId)!;
+
+  const ctx: PressContext = {
+    result,
+    isDerby: isDerby(fx.homeId, fx.awayId),
+    lowMorale: gs.meters.morale < 40,
+    highPrestige: gs.meters.prestige > 60,
+    tablePos, totalTeams: gs.league.clubs.length,
+    star: topPlayerName(mySquad(gs)),
+    rival: rival.short,
+  };
+  const rng = createRng(gs.seasonSeed * 100 + gs.week * 31 + 5)();
+  return { ...gs, phase: 'press', press: pickPressQuestion(ctx, rng) };
+}
+
+/** Apply the manager's answer to the reporter, then move on. */
+export function answerPress(gs: GameState, index: number): GameState {
+  const q = gs.press?.q;
+  const ans = q?.answers[index];
+  const meters = ans
+    ? {
+        money: gs.meters.money,
+        morale: clamp(gs.meters.morale + (ans.effect.morale ?? 0), 0, 100),
+        prestige: clamp(gs.meters.prestige + (ans.effect.prestige ?? 0), 0, 100),
+      }
+    : gs.meters;
+  return advancePastPress({ ...gs, meters, style: ans ? scoreStyle(gs.style, ans.effect) : gs.style });
+}
+
+/** Where the week actually ends, once the phone has had its say. */
+function endOfWeek(gs: GameState): GameState {
+  // remember the post match line shown on the result screen before moving on
+  const fanHistory = gs.lastPlayerMatch
+    ? [...gs.fanHistory, fanNote(gs, 'post').id].slice(-FAN_HISTORY)
+    : gs.fanHistory;
+  if (gs.seasonOver) {
+    const finale = chronicleAtSeasonEnd(gs);
+    const chronicle = finale ? [...gs.chronicle, finale] : gs.chronicle;
+    return { ...gs, phase: 'season-end', press: null, chat: null, chronicle, fanHistory };
+  }
+  return { ...gs, phase: 'hub', week: gs.week + 1, press: null, chat: null, fanHistory };
+}
+
+/**
+ * After the press room the phone buzzes, but only for a week worth talking
+ * about: a hammering either way, a derby, or a run of three. Anything else and
+ * we go straight home, which is what keeps the buzz meaningful.
+ */
+function advancePastPress(gs: GameState): GameState {
+  const r = gs.lastPlayerMatch;
+  const fx = playerFixture(gs);
+  if (!r || !fx) return endOfWeek(gs);
+
+  const iAmHome = fx.homeId === gs.clubId;
+  const margin = (iAmHome ? r.score[0] : r.score[1]) - (iAmHome ? r.score[1] : r.score[0]);
+  const trigger = pickTrigger({ margin, isDerby: isDerby(fx.homeId, fx.awayId), form: gs.form });
+  if (!trigger) return endOfWeek(gs);
+
+  const oppId = iAmHome ? fx.awayId : fx.homeId;
+  const rival = gs.league.clubs.find(c => c.id === oppId);
+  const my = iAmHome ? r.score[0] : r.score[1];
+  const opp = iAmHome ? r.score[1] : r.score[0];
+  const rng = createRng(gs.seasonSeed * 31 + gs.week * 977 + 11);
+  const chat = rollChat(trigger, {
+    club: club(gs).short,
+    rival: rival?.short ?? 'היריבה',
+    score: `${my} - ${opp}`,
+    star: topPlayerName(mySquad(gs)),
+    mgr: gs.profile.nickname || gs.profile.name || 'מאמן',
+  }, rng, gs.chatHistory.slice(-4));
+  if (!chat) return endOfWeek(gs);
+
+  return { ...gs, phase: 'chat', press: null, chat, chatHistory: [...gs.chatHistory, chat.id].slice(-12) };
+}
+
+/** The player closed the phone, now the week can end. */
+export function closeChat(gs: GameState): GameState {
+  return endOfWeek(gs);
+}
+
+/** TEMP dev preview: a career with a few rounds played, for the /?league route. */
+export function demoSeason(rounds = 8): GameState {
+  let gs = newGame(4242);
+  gs = setProfile(gs, { name: 'איציק', nickname: 'איציק', age: 38, type: 'calm' });
+  gs = pickClub(gs, gs.league.clubs[0].id);
+  gs = afterSigning(gs, {});
+  gs = enterSeason(gs);
+  for (let w = 1; w <= Math.min(rounds, gs.league.rounds); w++) {
+    const inp = liveMatchInput(gs);
+    const res = simulateMatch(
+      { id: inp.homeId, name: inp.homeName, players: inp.iAmHome ? inp.playerStarters : inp.oppStarters,
+        tactic: { formation: '4-3-3', approach: 'balanced', press: 'mid' }, chemistry: 0.7, isHome: true },
+      { id: inp.awayId, name: inp.awayName, players: inp.iAmHome ? inp.oppStarters : inp.playerStarters,
+        tactic: { formation: '4-3-3', approach: 'balanced', press: 'mid' }, chemistry: 0.7, isHome: false },
+      inp.seed);
+    gs = commitRound(gs, res);
+    gs = continueFromResult(gs);
+    if (gs.phase === 'press') gs = answerPress(gs, 0);
+    if (gs.phase === 'chat') gs = closeChat(gs);
+    if (gs.phase === 'season-end') break;
+  }
+  return { ...gs, phase: 'table' };
+}
+
+/** TEMP dev preview of one chat, used by the /?chat= route. Remove with it. */
+export function demoChat(trigger: Parameters<typeof rollChat>[0]): GameState | null {
+  const chat = rollChat(trigger, {
+    club: 'עין סלע', rival: 'נחל עוז', score: '3 - 0', star: 'כהן', mgr: 'איציק',
+  }, createRng(7), []);
+  return chat ? { ...newGame(), phase: 'chat', week: 6, chat } : null;
+}
+
+/* ------------------------------------------------------------ the charts */
+
+export interface ChartRow {
+  id: string;
+  name: string;
+  clubId: string;
+  apps: number;
+  goals: number;
+  assists: number;
+  mine: boolean;
+}
+
+/** The division's scoring charts. Ties break on fewer appearances, then name. */
+export function leagueChart(gs: GameState, by: 'goals' | 'assists'): ChartRow[] {
+  return Object.entries(gs.seasonStats)
+    .map(([id, s]): ChartRow => ({
+      id, name: s.name, clubId: s.clubId, apps: s.apps,
+      goals: s.goals, assists: s.assists, mine: s.clubId === gs.clubId,
+    }))
+    .filter(r => r[by] > 0 && r.name)
+    .sort((a, b) => b[by] - a[by] || a.apps - b.apps || a.name.localeCompare(b.name, 'he'))
+    .slice(0, 20);
+}
+
+/** A player's record this season, zeroed rather than missing so cards are simple. */
+export function seasonOf(gs: GameState, playerId: string): PlayerSeason {
+  return gs.seasonStats[playerId] ?? blankSeason();
+}
+
+/** Everything a player has done in the seasons already filed away. */
+export function careerOf(gs: GameState, playerId: string): CareerSeason[] {
+  return gs.careerStats[playerId] ?? [];
+}
+
+export function careerTotals(hist: CareerSeason[]) {
+  return hist.reduce((t, s) => ({
+    apps: t.apps + s.apps, goals: t.goals + s.goals, assists: t.assists + s.assists,
+  }), { apps: 0, goals: 0, assists: 0 });
+}
+
+export function openTable(gs: GameState): GameState { return { ...gs, phase: 'table' }; }
+export function closeTable(gs: GameState): GameState { return { ...gs, phase: 'hub' }; }
+
+/* --------------------------------------------------------------- chronicle */
+
+export function openChronicle(gs: GameState): GameState {
+  return { ...gs, phase: 'chronicle', chronicleSeen: gs.chronicle.length };
+}
+export function closeChronicle(gs: GameState): GameState {
+  return { ...gs, phase: 'hub' };
+}
+/* ------------------------------------------------------------ the new season */
+
+/**
+ * Roll the career forward one year. The club climbs or drops, the squad comes
+ * with you a year older, and the new division is built around you. This is what
+ * replaced "new career" at the end of a season, so a save is a real climb from
+ * ליגה ג' rather than a fourteen round loop.
+ */
+export function startNextSeason(gs: GameState): GameState {
+  const table = sortedTable(gs.league);
+  const position = Math.max(1, table.findIndex(s => s.clubId === gs.clubId) + 1);
+  const teams = gs.league.clubs.length;
+  const myClub = club(gs);
+
+  const next = buildNextSeason({
+    seasonSeed: gs.seasonSeed,
+    season: gs.season,
+    tier: myClub.tier,
+    myClub,
+    myClubId: gs.clubId,
+    squads: gs.league.squads,
+    position, teams,
+    minSquad: MIN_SQUAD,
+    stadiumOk: gs.stadium.capacity >= requiredCapacity(myClub.tier + 1),
+  });
+
+  // the whole division carries forward, aged, rather than being regenerated
+  const league: LeagueState = {
+    clubs: next.clubs,
+    squads: next.squads,
+    ovr: Object.fromEntries(
+      Object.entries(next.squads).map(([id, sq]) => [
+        id, Math.round(sq.starters.reduce((s, p) => s + overall(p), 0) / sq.starters.length),
+      ]),
+    ),
+    fixtures: buildFixtures(next.clubs.map(c => c.id)),
+    table: emptyTable(next.clubs),
+    rounds: (next.clubs.length - 1) * 2,
+  };
+
+  const r = next.report;
+  const mine = next.squads[gs.clubId];
+  const rng = createRng(next.seed + 991);
+  const takenNames = new Set([...mine.starters, ...mine.bench].map(p => p.name));
+
+  const report: SeasonReport = { ...r, season: gs.season };
+  const prestigeDelta = r.result === 'champion' ? +9 : r.result === 'promoted' ? +6 : r.result === 'relegated' ? -8 : 0;
+
+  // file the season away on each player's record before the slate is wiped.
+  // only men still in the division are kept, and only fifteen years each, so a
+  // forty season career does not quietly fill up localStorage.
+  const stillHere = new Map<string, string>();
+  for (const [cid, sq] of Object.entries(league.squads)) {
+    const short = league.clubs.find(c => c.id === cid)?.short ?? '';
+    for (const p of [...sq.starters, ...sq.bench]) stillHere.set(p.id, short);
+  }
+  const careerStats: Record<string, CareerSeason[]> = {};
+  for (const [id, hist] of Object.entries(gs.careerStats)) {
+    if (stillHere.has(id)) careerStats[id] = [...hist];
+  }
+  for (const [id, s] of Object.entries(gs.seasonStats)) {
+    const short = stillHere.get(id);
+    if (!short || s.apps === 0) continue;
+    const entry: CareerSeason = {
+      season: gs.season, tier: club(gs).tier, clubShort: short,
+      apps: s.apps, goals: s.goals, assists: s.assists,
+    };
+    careerStats[id] = [...(careerStats[id] ?? []), entry].slice(-15);
+  }
+
+  // Wages are paid weekly during the season now, so the summer is the prize
+  // money only. Arriving at the break already broke still costs you the room.
+  const rawMoney = gs.meters.money + r.purse;
+  const brokeIt = gs.meters.money <= 0;
+  const moraleDelta = (r.result === 'relegated' ? -12 : +6) + (brokeIt ? -10 : 0);
+
+  return {
+    ...gs,
+    // the summer sits between the seasons, where the report of who aged, who
+    // retired and who came up from the youth actually belongs
+    phase: 'preseason',
+    season: gs.season + 1,
+    lastReport: report,
+    week: 1,
+    league,
+    market: makeMarket(r.newTier, rng, 10, takenNames),
+    meters: {
+      // prize money in, a full season of wages out
+      money: Math.max(0, rawMoney),
+      morale: clamp(gs.meters.morale + moraleDelta, 0, 100),
+      prestige: clamp(gs.meters.prestige + prestigeDelta - (brokeIt ? 4 : 0), 0, 100),
+    },
+    seasonStats: {},
+    careerStats,
+    form: [],
+    seasonOver: false,
+    lastPlayerMatch: null,
+    lastRound: [],
+    dilemma: null,
+    pendingOutcome: null,
+    press: null,
+    chronicle: [...gs.chronicle, ...seasonChronicle(gs, report, myClub.short)],
+  };
+}
+
+/** The promotion or relegation itself is a chapter worth keeping. */
+function seasonChronicle(gs: GameState, r: SeasonReport, clubShort: string): ChronicleEntry[] {
+  const id = `season-${r.season}-${r.result}`;
+  if (gs.chronicle.some(e => e.id === id)) return [];
+  const league = LEAGUE_NAMES[r.newTier] ?? '';
+  if (r.result === 'champion' || r.result === 'promoted') {
+    return [{
+      id, kind: 'season_end', week: r.season, icon: 'trophy', tint: 'gold',
+      title: r.result === 'champion' ? `אלופים, ועולים ל${league}` : `עולים ל${league}`,
+      body: `${clubShort} סיימה במקום ${r.position} וטיפסה דרגה. עונה הבאה כבר משחקים מול קבוצות אחרות לגמרי.`,
+    }];
+  }
+  if (r.result === 'relegated') {
+    return [{
+      id, kind: 'season_end', week: r.season, icon: 'alert', tint: 'loss',
+      title: `יורדים ל${league}`,
+      body: `מקום ${r.position} בטבלה, וזה נגמר בירידה. עכשיו בונים מחדש ומטפסים שוב.`,
+    }];
+  }
+  return [];
+}
+
+/** Is the club already at the top of the Israeli ladder. */
+export function atTopTier(gs: GameState): boolean {
+  return club(gs).tier >= TOP_TIER;
+}
+
+export function openCaptain(gs: GameState): GameState { return { ...gs, phase: 'captain' }; }
+export function openAssistant(gs: GameState): GameState { return { ...gs, phase: 'assistant' }; }
+export function unreadChronicle(gs: GameState): number {
+  return Math.max(0, gs.chronicle.length - gs.chronicleSeen);
+}
+
+/* --------------------------------------------------------------- utilities */
+
+/** Which instinct did this choice express. Pure counting, no extra data needed. */
+function scoreStyle(style: ManagerStyle, e: { money?: number; morale?: number; prestige?: number }): ManagerStyle {
+  const money = e.money ?? 0, morale = e.morale ?? 0, prestige = e.prestige ?? 0;
+  const next = { ...style };
+  if (morale > 0 && (money < 0 || prestige < 0)) next.players += 1;
+  else if (prestige > 0 && morale <= 0) next.media += 1;
+  else if (money > 0 && morale < 0) next.money += 1;
+  else if (morale > 0) next.players += 1;
+  else if (prestige > 0) next.media += 1;
+  else if (money > 0) next.money += 1;
+  return next;
+}
+
+function cloneTable(t: LeagueState['table']): LeagueState['table'] {
+  const out: LeagueState['table'] = {};
+  for (const k of Object.keys(t)) out[k] = { ...t[k] };
+  return out;
+}
+
+function hashPair(a: string, b: string): number {
+  let h = 0;
+  const s = a + '|' + b;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h) % 9973;
+}
+
+export { sortedTable };
