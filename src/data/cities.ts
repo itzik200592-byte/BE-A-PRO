@@ -200,6 +200,7 @@ const CURATED: Record<string, CitySpec> = {
   'אילת':      { prefix: 'הפועל', primary: '#e67e22', secondary: '#0b2540', accent: '#ffffff', shape: 'diamond', pattern: 'stripes' },
   'מודיעין':   { prefix: 'מ.ס', name: 'מ.ס מודיעין', short: 'מודיעין', primary: '#1f6fd6', secondary: '#f4e7d8', accent: '#f1c40f', shape: 'shield', pattern: 'half' },
   'בית שמש':   { prefix: 'הפועל', primary: '#c0392b', secondary: '#1a1a1a', accent: '#ffffff', shape: 'shield', pattern: 'sash' },
+  'בני ברק':   { prefix: 'מ.ס', primary: '#1a7a3a', secondary: '#f4e7d8', accent: '#111111', shape: 'shield', pattern: 'stripes' },
 };
 
 const PREFIX_POOL: Prefix[] = ['מ.ס', 'הפועל', 'מכבי', 'בני', 'איחוד', 'צעירי', 'הכוח'];
@@ -272,6 +273,37 @@ export function clubFromCity(city: City, tier = 1): Club {
     weakness: WEAKNESSES[(h >>> 10) % WEAKNESSES.length],
     traits,
   };
+}
+
+/**
+ * Which towns play in which division above ליגה ג׳. Real leagues are not
+ * regional, they are national and sorted by size, so the top flight is the big
+ * cities and each rung down is smaller towns. ליגת העל is the giants, הלאומית
+ * is big cities plus a few mid ones (לוד, מודיעין, חדרה), and so on down.
+ * Order is the marquee first, since a division takes the leading names.
+ */
+const TIER_ROSTER: Record<number, string[]> = {
+  // tier 2, ליגה ב׳ — small towns
+  2: ['גדרה', 'אבן יהודה', 'זכרון יעקב', 'יקנעם', 'ערד', 'שדרות', 'אופקים', 'נתיבות',
+      'מגדל העמק', 'נשר', 'טירת כרמל', 'אור עקיבא', 'כפר יונה', 'גן יבנה', 'ראש פינה', 'בית שאן'],
+  // tier 3, ליגה א׳ — mid towns
+  3: ['כפר סבא', 'רעננה', 'הרצליה', 'נס ציונה', 'יבנה', 'רמלה', 'נהריה', 'עכו',
+      'טבריה', 'עפולה', 'קריית אתא', 'אום אל פחם', 'הוד השרון', 'קריית מוצקין', 'טירה', 'סחנין'],
+  // tier 4, הלאומית — big cities plus a few smaller ones
+  4: ['אשקלון', 'רחובות', 'חדרה', 'מודיעין', 'בית שמש', 'בת ים', 'הרצליה', 'כפר סבא',
+      'לוד', 'קריית גת', 'רעננה', 'נצרת'],
+  // tier 5, ליגת העל — the giants only
+  5: ['תל אביב', 'חיפה', 'ירושלים', 'באר שבע', 'אשדוד', 'ראשון לציון', 'פתח תקווה',
+      'נתניה', 'חולון', 'בני ברק', 'רמת גן'],
+};
+
+/** The clubs of a division above ליגה ג׳, real towns sized to the tier. */
+export function cityClubsForTier(tier: number): Club[] {
+  const names = TIER_ROSTER[tier] ?? [];
+  return names
+    .map(n => findCity(n))
+    .filter((c): c is City => !!c)
+    .map(c => clubFromCity(c, tier));
 }
 
 /** Rough km distance, good enough to rank neighbours. */

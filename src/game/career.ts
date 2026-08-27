@@ -10,7 +10,7 @@
 
 import type { Club } from '../data/clubs.ts';
 import { LEAGUE_C, leagueCeiling } from '../data/clubs.ts';
-import { clubsForTier } from '../data/leagues.ts';
+import { cityClubsForTier } from '../data/cities.ts';
 import type { Squad } from '../data/squadGen.ts';
 import { makePlayer, makeSquad, nextPlayerId } from '../data/squadGen.ts';
 import type { Player, Rng } from '../engine/matchEngine.ts';
@@ -42,7 +42,7 @@ export interface SeasonReport {
 
 /** All the clubs of a division, tier 1 being the one you can pick at the start. */
 export function poolForTier(tier: number): Club[] {
-  return tier <= 1 ? LEAGUE_C.map(c => ({ ...c })) : clubsForTier(tier);
+  return tier <= 1 ? LEAGUE_C.map(c => ({ ...c })) : cityClubsForTier(tier);
 }
 
 /* ------------------------------------------------------------------ aging */
