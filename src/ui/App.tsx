@@ -25,6 +25,7 @@ import { StandingsScreen } from './screens/Standings.tsx';
 import { CaptainScreen } from './screens/Captain.tsx';
 import { AssistantScreen } from './screens/Assistant.tsx';
 import { StadiumScreen } from './screens/Stadium.tsx';
+import { PacksScreen } from './screens/Packs.tsx';
 
 export function App() {
   const [entered, setEntered] = useState(() => hasEntry());  // soft code gate for closed testing
@@ -137,11 +138,20 @@ export function App() {
           onAssistant={() => setGs(G.openAssistant(gs))}
           onInbox={() => setGs(G.openInbox(gs))}
           onStadium={() => setGs(G.openStadium(gs))}
+          onPacks={() => setGs(G.openPacks(gs))}
           onTable={() => setGs(G.openTable(gs))} />
       )}
       {gs.phase === 'stadium' && (
         <StadiumScreen gs={gs}
           onBuild={key => setGs(g => G.startStadiumProject(g, key))}
+          onBack={() => setGs(G.backToHub(gs))} />
+      )}
+      {gs.phase === 'packs' && (
+        <PacksScreen gs={gs}
+          onWatchAd={() => setGs(G.watchAdForGem(gs))}
+          onBuy={id => setGs(g => G.buyPack(g, id))}
+          onSign={() => setGs(g => G.signPull(g))}
+          onSell={() => setGs(g => G.sellPull(g))}
           onBack={() => setGs(G.backToHub(gs))} />
       )}
       {gs.phase === 'inbox' && (

@@ -426,3 +426,16 @@ input{font-family:inherit;}
 
 /* wrong-code nudge on the entry gate */
 @keyframes shake{10%,90%{transform:translateX(-1px);}20%,80%{transform:translateX(2px);}30%,50%,70%{transform:translateX(-4px);}40%,60%{transform:translateX(4px);}}
+
+/* pack opening, the moment the whole gacha rests on */
+@keyframes pack-shake{
+  0%,100%{transform:translateX(0) rotate(0)}
+  20%{transform:translateX(-5px) rotate(-1.5deg)}
+  40%{transform:translateX(5px) rotate(1.5deg)}
+  60%{transform:translateX(-4px) rotate(-1deg)}
+  80%{transform:translateX(4px) rotate(1deg)}
+}
+@keyframes pack-flip{
+  from{transform:rotateY(90deg) scale(.9); opacity:0}
+  to{transform:rotateY(0) scale(1); opacity:1}
+}

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import * as G from '../../game/state.ts';
 import type { Player, Position } from '../../engine/matchEngine.ts';
 import { overall } from '../../engine/matchEngine.ts';
+import { ovrColor } from '../../game/cards.ts';
 import type { Trait } from '../../data/personalities.ts';
 import { headlineTrait, assignTraits, renderLine, TONE_COLOR } from '../../data/personalities.ts';
 import type { Squad } from '../../data/squadGen.ts';
@@ -18,12 +19,8 @@ export const LINE_OF: Record<Position, 'gk' | 'def' | 'mid' | 'atk'> = {
 export const LINE_LABEL = { gk: 'שוער', def: 'הגנה', mid: 'קישור', atk: 'התקפה' } as const;
 export const LINE_COLOR = { gk: 'var(--pos-gk)', def: 'var(--pos-def)', mid: 'var(--pos-mid)', atk: 'var(--pos-atk)' } as const;
 
-export function ovrColor(o: number): string {
-  if (o >= 82) return 'var(--gold-hi)';
-  if (o >= 75) return 'var(--gold)';
-  if (o >= 65) return '#c7ced6';
-  return '#c07a3e';
-}
+// one source of truth for the rating color, shared with the card system
+export { ovrColor };
 
 /** The little captain armband badge, an inline gold "C". */
 export function CaptainMark({ size = 18 }: { size?: number }) {

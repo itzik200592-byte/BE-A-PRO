@@ -12,6 +12,7 @@ import { traitsFor, renderLine, TONE_COLOR } from '../../data/personalities.ts';
 import { Crest } from './Crest.tsx';
 import { Icon } from './Icon.tsx';
 import { Portal } from './Portal.tsx';
+import { UltraCard } from './UltraCard.tsx';
 import { formatMoney } from './bits.tsx';
 import { ovrColor } from '../screens/Squad.tsx';
 
@@ -107,6 +108,11 @@ export function PlayerCard({ p, club, season, career, traits, onClose }: {
         </div>
 
         <div className="pcard-body">
+          {/* the collectible card itself, the hero of the modal */}
+          <div style={{ display: 'grid', placeItems: 'center', marginBottom: 2 }}>
+            <UltraCard player={p} club={club} size="l" />
+          </div>
+
           {/* who he is, this is the part that makes him yours */}
           {list.length > 0 && (
             <div className="stack" style={{ gap: 9 }}>

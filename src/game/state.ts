@@ -3,7 +3,7 @@ import type { ManagerId, ManagerType } from '../data/managers.ts';
 import { getManager } from '../data/managers.ts';
 import type { Squad } from '../data/squadGen.ts';
 import { playerValue } from '../data/squadGen.ts';
-import type { MatchResult, TeamInput, Approach, Press, Player } from '../engine/matchEngine.ts';
+import type { MatchResult, TeamInput, Approach, Press, Player, Position, Rng } from '../engine/matchEngine.ts';
 import { simulateMatch, overall, createRng } from '../engine/matchEngine.ts';
 import type { LeagueState, Fixture } from './league.ts';
 import { initLeague, applyResult, sortedTable, buildFixtures, emptyTable } from './league.ts';
@@ -30,11 +30,17 @@ import {
   STADIUM_START, requiredCapacity, stadiumImageTier, gateIncome, expansionOptions,
 } from './career.ts';
 import type { RoundCosts, ExpansionOption } from './career.ts';
+import type { PackPull, PackId } from './packs.ts';
+import {
+  openPack, packById, GEMS_AT_START, GEMS_PER_AD, GEMS_ON_PROMOTION,
+  ADS_PER_SEASON, PACK_CONTRACT_YEARS,
+} from './packs.ts';
 
 export type Phase =
   | 'onboard-manager' | 'onboard-club' | 'signing' | 'squad' | 'hub' | 'transfers'
   | 'dilemma' | 'tactic' | 'match' | 'result' | 'press' | 'season-end' | 'chronicle'
-  | 'captain' | 'assistant' | 'preseason' | 'preseason-market' | 'inbox' | 'chat' | 'table' | 'stadium';
+  | 'captain' | 'assistant' | 'preseason' | 'preseason-market' | 'inbox' | 'chat' | 'table' | 'stadium'
+  | 'packs';
 
 export type MarketLine = 'gk' | 'def' | 'mid' | 'atk';
 
@@ -163,6 +169,12 @@ export interface GameState {
   preWeek: number;
   /** pre season events already handled, so a saga does not reappear */
   preResolved: string[];
+  /** premium currency for packs. Never convertible from shekels, see packs.ts */
+  gems: number;
+  /** ads watched for gems this season, capped at ADS_PER_SEASON */
+  adsWatched: number;
+  /** the card just pulled from a pack, waiting to be signed or sold */
+  pull: PackPull | null;
 }
 
 /**
@@ -230,6 +242,9 @@ export function newGame(seed = 12345): GameState {
     contracts: {},
     preWeek: 0,
     preResolved: [],
+    gems: GEMS_AT_START,
+    adsWatched: 0,
+    pull: null,
   };
 }
 
@@ -710,6 +725,100 @@ export function sellPlayer(gs: GameState, playerId: string): GameState {
 }
 
 export { playerValue, sellPrice, MIN_SQUAD, MAX_SQUAD };
+
+/* -------------------------------------------------------- gems and packs */
+
+export function openPacks(gs: GameState): GameState {
+  return { ...gs, phase: 'packs' };
+}
+
+export function adsLeft(gs: GameState): number {
+  return Math.max(0, ADS_PER_SEASON - gs.adsWatched);
+}
+
+/**
+ * The ad reward. Deliberately capped per season: a gem that can be farmed is
+ * not a premium currency, and an uncapped ad loop is the thing that makes a
+ * game feel like a slot machine.
+ */
+export function watchAdForGem(gs: GameState): GameState {
+  if (adsLeft(gs) <= 0) return gs;
+  return { ...gs, gems: gs.gems + GEMS_PER_AD, adsWatched: gs.adsWatched + 1 };
+}
+
+export function packBlockedReason(gs: GameState, id: PackId): string | null {
+  const spec = packById(id);
+  if (gs.gems < spec.cost) return `צריך ${spec.cost} יהלומים`;
+  if (squadSize(gs) >= MAX_SQUAD) return `הסגל מלא, מקסימום ${MAX_SQUAD} שחקנים`;
+  return null;
+}
+
+/**
+ * Spend the gems and roll the card. The pull is held on the state rather than
+ * applied straight away, so the reveal screen can play out and the manager
+ * still gets to choose: into the squad, or sold on for cash.
+ */
+export function buyPack(gs: GameState, id: PackId): GameState {
+  if (packBlockedReason(gs, id)) return gs;
+  const spec = packById(id);
+  const sq = mySquad(gs);
+  const taken = new Set([...sq.starters, ...sq.bench].map(p => p.name));
+  // bias the roll toward whichever line is thinnest, so a reward is never a
+  // twelfth striker while the defence is bare
+  const rng = createRng(gs.seasonSeed + gs.season * 7919 + gs.gems * 131 + gs.adsWatched * 17);
+  const pull = openPack(spec, club(gs).tier, rng, { position: thinnestPosition(gs, rng), taken });
+  return { ...gs, gems: gs.gems - spec.cost, pull };
+}
+
+/** The position the squad is shortest of, for biasing a pack roll. */
+function thinnestPosition(gs: GameState, rng: Rng): Position {
+  const sq = mySquad(gs);
+  const all = [...sq.starters, ...sq.bench];
+  const counts: Record<MarketLine, number> = { gk: 0, def: 0, mid: 0, atk: 0 };
+  for (const p of all) counts[lineOfPosition(p.position)]++;
+  // a keeper is only ever wanted when there are fewer than two
+  const order: [MarketLine, number, Position[]][] = [
+    ['gk', counts.gk < 2 ? -99 : counts.gk, ['GK']],
+    ['def', counts.def, ['CB', 'LB', 'RB']],
+    ['mid', counts.mid, ['CDM', 'CM', 'CAM']],
+    ['atk', counts.atk, ['ST', 'LW', 'RW']],
+  ];
+  order.sort((a, b) => a[1] - b[1]);
+  const picks = order[0][2];
+  return picks[Math.floor(rng() * picks.length)];
+}
+
+function lineOfPosition(pos: Position): MarketLine {
+  if (pos === 'GK') return 'gk';
+  if (pos === 'CB' || pos === 'LB' || pos === 'RB') return 'def';
+  if (pos === 'CDM' || pos === 'CM' || pos === 'CAM') return 'mid';
+  return 'atk';
+}
+
+/** Take the pulled card into the squad, on a short deal. */
+export function signPull(gs: GameState): GameState {
+  const pull = gs.pull;
+  if (!pull) return gs;
+  if (squadSize(gs) >= MAX_SQUAD) return gs;
+  const sq = mySquad(gs);
+  const next = writeSquad(gs, { starters: sq.starters, bench: [...sq.bench, pull.player] });
+  return {
+    ...next,
+    pull: null,
+    contracts: { ...gs.contracts, [pull.player.id]: PACK_CONTRACT_YEARS },
+  };
+}
+
+/** Sell the pulled card on instead. There is never an empty pack. */
+export function sellPull(gs: GameState): GameState {
+  const pull = gs.pull;
+  if (!pull) return gs;
+  return {
+    ...gs,
+    pull: null,
+    meters: { ...gs.meters, money: gs.meters.money + pull.cashValue },
+  };
+}
 
 /* ---------------------------------------------------------------- the captain */
 
@@ -1471,6 +1580,11 @@ export function startNextSeason(gs: GameState): GameState {
     pendingOutcome: null,
     press: null,
     chronicle: [...gs.chronicle, ...seasonChronicle(gs, report, myClub.short)],
+    // climbing a division is the milestone the premium currency is pinned to,
+    // and the ad allowance refills with the new season
+    gems: gs.gems + (r.result === 'champion' || r.result === 'promoted' ? GEMS_ON_PROMOTION : 0),
+    adsWatched: 0,
+    pull: null,
   };
 }
 

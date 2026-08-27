@@ -9,6 +9,7 @@
 
 import type { GameState, PlayerSeason } from './state.ts';
 import { STADIUM_START } from './career.ts';
+import { GEMS_AT_START } from './packs.ts';
 
 const KEY = 'beapro.career.v1';
 const VERSION = 1;
@@ -96,6 +97,10 @@ export function loadCareer(): GameState | null {
     stadium: s.stadium ?? { capacity: STADIUM_START, project: null },
     stadiumReveal: s.stadiumReveal ?? null,
     marketFocus: s.marketFocus ?? null,
+    // a save from before packs existed starts with the opening grant
+    gems: s.gems ?? GEMS_AT_START,
+    adsWatched: s.adsWatched ?? 0,
+    pull: s.pull ?? null,
   };
   if (patched.phase === 'match') return { ...patched, phase: 'hub' };
   return patched;

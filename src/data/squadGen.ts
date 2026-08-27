@@ -47,8 +47,12 @@ export function makePlayer(
   if (isYoung) lvl -= 3;
 
   const attrs = attrFor(position, lvl, rng);
+  // round like attrFor does. leagueCeiling is 47.5 + 5.5 * tier, so callers
+  // hand us a fractional level on half the divisions, and an unrounded keeper
+  // shows up in the UI as 56.35608717286959
+  const r = Math.round;
   const gk = position === 'GK'
-    ? { diving: lvl + 2, handling: lvl, kicking: lvl - 6, reflexes: lvl + 3, positioning: lvl }
+    ? { diving: r(lvl + 2), handling: r(lvl), kicking: r(lvl - 6), reflexes: r(lvl + 3), positioning: r(lvl) }
     : undefined;
 
   return {

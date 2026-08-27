@@ -6,11 +6,13 @@ import { Icon } from '../components/Icon.tsx';
 import type { IconName } from '../components/Icon.tsx';
 import { MiniTable } from './Table.tsx';
 import { FanNote } from '../components/FanNote.tsx';
+import { Gem, GemCount } from '../components/Gem.tsx';
+import { PACKS } from '../../game/packs.ts';
 
-export function Hub({ gs, onStart, onSquad, onTransfers, onChronicle, onCaptain, onAssistant, onInbox, onStadium, onTable }: {
+export function Hub({ gs, onStart, onSquad, onTransfers, onChronicle, onCaptain, onAssistant, onInbox, onStadium, onPacks, onTable }: {
   gs: G.GameState; onStart: () => void; onSquad: () => void; onTransfers: () => void;
   onChronicle: () => void; onCaptain: () => void; onAssistant: () => void; onInbox: () => void;
-  onStadium: () => void; onTable: () => void;
+  onStadium: () => void; onPacks: () => void; onTable: () => void;
 }) {
   const c = G.club(gs);
   const fx = G.playerFixture(gs);
@@ -86,6 +88,8 @@ export function Hub({ gs, onStart, onSquad, onTransfers, onChronicle, onCaptain,
         </div>
 
         {gs.inbox.length > 0 && <InboxTile count={gs.inbox.length} onClick={onInbox} />}
+
+        <PacksTile gs={gs} onClick={onPacks} />
 
         <StadiumTile gs={gs} onClick={onStadium} />
 
@@ -179,6 +183,36 @@ function StadiumTile({ gs, onClick }: { gs: G.GameState; onClick: () => void }) 
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         }}>!</span>
       )}
+      <Icon name="chevron" size={17} color="var(--ink-faint)" />
+    </button>
+  );
+}
+
+/**
+ * Packs. Nudges when there is something to actually do, either enough gems for
+ * the cheapest pack or an unused ad, and stays quiet otherwise.
+ */
+function PacksTile({ gs, onClick }: { gs: G.GameState; onClick: () => void }) {
+  const left = G.adsLeft(gs);
+  const cheapest = Math.min(...PACKS.map(p => p.cost));
+  const canOpen = gs.gems >= cheapest;
+  const accent = canOpen ? 'var(--gold)' : undefined;
+  const note = canOpen
+    ? `יש לך מספיק ל${PACKS.filter(p => gs.gems >= p.cost).length === PACKS.length ? 'כל החבילות' : 'חבילה'}`
+    : left > 0
+      ? `${left} צפיות בפרסומת נשארו העונה`
+      : `צריך ${cheapest} יהלומים לחבילה`;
+  return (
+    <button className="tile select" onClick={onClick} style={{
+      textAlign: 'start', display: 'flex', gap: 12, alignItems: 'center',
+      borderColor: accent ? 'color-mix(in srgb, var(--gold) 38%, transparent)' : undefined,
+    }}>
+      <Gem size={22} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 800, fontSize: 16 }}>חבילות שחקנים</div>
+        <div style={{ fontSize: 13.5, color: accent ?? 'var(--ink-faint)', fontWeight: 600, marginTop: 2 }}>{note}</div>
+      </div>
+      <GemCount n={gs.gems} size={16} style={{ color: 'var(--ink-dim)' }} />
       <Icon name="chevron" size={17} color="var(--ink-faint)" />
     </button>
   );
