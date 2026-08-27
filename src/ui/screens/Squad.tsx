@@ -10,13 +10,13 @@ import { Icon } from '../components/Icon.tsx';
 import { Stepper } from '../components/Stepper.tsx';
 import { PlayerCard } from '../components/PlayerCard.tsx';
 
-const LINE_OF: Record<Position, 'gk' | 'def' | 'mid' | 'atk'> = {
+export const LINE_OF: Record<Position, 'gk' | 'def' | 'mid' | 'atk'> = {
   GK: 'gk', CB: 'def', LB: 'def', RB: 'def',
   CDM: 'mid', CM: 'mid', CAM: 'mid',
   LW: 'atk', RW: 'atk', ST: 'atk',
 };
-const LINE_LABEL = { gk: 'שוער', def: 'הגנה', mid: 'קישור', atk: 'התקפה' } as const;
-const LINE_COLOR = { gk: 'var(--pos-gk)', def: 'var(--pos-def)', mid: 'var(--pos-mid)', atk: 'var(--pos-atk)' } as const;
+export const LINE_LABEL = { gk: 'שוער', def: 'הגנה', mid: 'קישור', atk: 'התקפה' } as const;
+export const LINE_COLOR = { gk: 'var(--pos-gk)', def: 'var(--pos-def)', mid: 'var(--pos-mid)', atk: 'var(--pos-atk)' } as const;
 
 export function ovrColor(o: number): string {
   if (o >= 82) return 'var(--gold-hi)';

@@ -1,19 +1,23 @@
+import { useMemo, useState } from 'react';
 import * as G from '../../game/state.ts';
 import type { PreEvent } from '../../game/state.ts';
+import type { Player } from '../../engine/matchEngine.ts';
+import type { Squad } from '../../data/squadGen.ts';
 import { PRE_ROUNDS } from '../../game/preseason.ts';
 import { overall } from '../../engine/matchEngine.ts';
+import { assignTraits } from '../../data/personalities.ts';
 import { Meters, formatMoney, StatBox } from '../components/bits.tsx';
 import { Crest } from '../components/Crest.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Stepper } from '../components/Stepper.tsx';
-import { ovrColor } from './Squad.tsx';
+import { PlayerCard } from '../components/PlayerCard.tsx';
+import { ovrColor, LINE_OF, LINE_LABEL, LINE_COLOR } from './Squad.tsx';
 
 /**
- * The summer board. Three rounds of business before the league starts, no match
- * in between. The market is open the whole time, and each round the manager's
- * desk fills up: who wants to leave, who wants paying, and whose contract has
- * run out. The feeling is ownership, you are building the team that will walk
- * out for round one.
+ * The summer board, and the first screen a new manager really works with. It has
+ * two jobs: make it unmistakable that this is the transfer window and no football
+ * is played yet, and let you actually read your squad, line by line, so you can
+ * see the holes you are here to fill.
  */
 export function PreSeasonMarket({
   gs, firstCareer, onOpenMarket, onResolveDeparture, onRenew, onRelease, onDismissOutcome, onAdvance,
@@ -34,6 +38,9 @@ export function PreSeasonMarket({
   const events = G.preseasonEvents(gs);
   const lastRound = gs.preWeek >= PRE_ROUNDS;
   const blocked = G.preseasonBlockedReason(gs);
+
+  const [card, setCard] = useState<Player | null>(null);
+  const traits = useMemo(() => assignTraits([...sq.starters, ...sq.bench]), [sq]);
 
   // an answered piece of business shows its outcome, same grammar as the inbox
   if (gs.pendingOutcome != null) {
@@ -66,9 +73,8 @@ export function PreSeasonMarket({
       <div className="screen pad stack pad-b" style={{ gap: 13, minHeight: '100%' }}>
         {firstCareer && <Stepper current={5} />}
 
-        {/* The banner. This is the one thing that has to be unmistakable: no
-            football is played here, this is the window, and it lasts three rounds. */}
-        <div className="tile-hero" style={{ padding: '16px 16px 14px', marginTop: firstCareer ? 2 : 6 }}>
+        {/* The banner. No football is played here, this is the window, three rounds. */}
+        <div className="tile-hero" style={{ padding: '16px 16px 15px', marginTop: firstCareer ? 2 : 6 }}>
           <div className="row" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
             <span className="eyebrow">אין משחקים · רק העברות</span>
             <RoundDots round={gs.preWeek} />
@@ -87,14 +93,13 @@ export function PreSeasonMarket({
               ? 'המחזור האחרון לפני שריקת הפתיחה. סגור את כל החוזים, ואז יוצאים לעונה.'
               : `העונה עוד לא התחילה. יש לך ${PRE_ROUNDS - gs.preWeek + 1} מחזורי קיץ להעברות, חוזים ובניית סגל, ורק אחריהם משחקים.`}
           </p>
-        </div>
 
-        <div className="tile-hero" style={{ padding: 16 }}>
-          <div className="row" style={{ gap: 12, marginBottom: 13 }}>
-            <Crest club={c} size={42} />
+          {/* the club, with its three headline numbers built into the banner */}
+          <div className="row" style={{ gap: 11, marginTop: 15, marginBottom: 12 }}>
+            <Crest club={c} size={40} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 800, fontSize: 16 }}>{c.name}</div>
-              <div className="sub" style={{ fontSize: 14 }}>{c.strength}</div>
+              <div style={{ fontWeight: 800, fontSize: 15.5 }}>{c.name}</div>
+              <div className="sub" style={{ fontSize: 13 }}>{c.strength}</div>
             </div>
           </div>
           <div className="row" style={{ gap: 8 }}>
@@ -103,6 +108,9 @@ export function PreSeasonMarket({
             <StatBox label="שחקנים" value={String(size)} />
           </div>
         </div>
+
+        {/* the squad, so the manager can see what he has and where the holes are */}
+        <SquadPanel squad={sq} onOpen={setCard} />
 
         {/* the desk: sagas and expiring deals */}
         {events.length > 0 && (
@@ -122,8 +130,14 @@ export function PreSeasonMarket({
         <button className="tile select" onClick={onOpenMarket} style={{
           textAlign: 'start', display: 'flex', gap: 12, alignItems: 'center',
           borderColor: 'color-mix(in srgb, var(--win) 34%, transparent)',
+          background: 'linear-gradient(180deg, color-mix(in srgb, var(--win) 8%, var(--surface-2)), var(--surface))',
         }}>
-          <Icon name="handshake" size={22} color="var(--win)" />
+          <span style={{
+            width: 42, height: 42, borderRadius: 12, flex: 'none', display: 'grid', placeItems: 'center',
+            background: 'color-mix(in srgb, var(--win) 16%, transparent)', border: '1px solid color-mix(in srgb, var(--win) 32%, transparent)',
+          }}>
+            <Icon name="handshake" size={21} color="var(--win)" />
+          </span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 800, fontSize: 16 }}>שוק ההעברות</div>
             <div style={{ fontSize: 13.5, color: 'var(--win)', fontWeight: 600, marginTop: 2 }}>
@@ -151,7 +165,78 @@ export function PreSeasonMarket({
           </p>
         )}
       </div>
+
+      {card && (
+        <PlayerCard p={card} club={c} season={gs.seasonStats[card.id]} career={G.careerOf(gs, card.id)}
+          traits={traits.get(card.id) ?? []} onClose={() => setCard(null)} />
+      )}
     </>
+  );
+}
+
+/* -------------------------------------------------------------- the squad */
+
+const LINES = ['gk', 'def', 'mid', 'atk'] as const;
+/** A healthy squad wants roughly this many bodies per line. Below it we nudge. */
+const IDEAL: Record<(typeof LINES)[number], number> = { gk: 2, def: 5, mid: 4, atk: 3 };
+const surname = (n: string) => n.split(' ').slice(-1)[0];
+
+/** The squad read line by line, with thin areas flagged so gaps are obvious. */
+function SquadPanel({ squad, onOpen }: { squad: Squad; onOpen: (p: Player) => void }) {
+  const all = [...squad.starters, ...squad.bench];
+  const grouped = LINES.map(key => ({
+    key, label: LINE_LABEL[key], color: LINE_COLOR[key], min: IDEAL[key],
+    players: all.filter(p => LINE_OF[p.position] === key).sort((a, b) => overall(b) - overall(a)),
+  }));
+  const gaps = grouped.filter(l => l.players.length < l.min);
+
+  return (
+    <>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <div className="label-cap">הסגל שלך</div>
+        {gaps.length > 0
+          ? <span className="chip" style={{ background: 'color-mix(in srgb, var(--loss) 16%, transparent)', color: 'var(--loss)' }}>
+              חסר: {gaps.map(g => g.label).join(' · ')}
+            </span>
+          : <span className="chip" style={{ background: 'color-mix(in srgb, var(--win) 15%, transparent)', color: 'var(--win)' }}>סגל מאוזן</span>}
+      </div>
+      <div className="tile" style={{ padding: '4px 12px 10px' }}>
+        {grouped.map((l, i) => (
+          <div key={l.key} style={{ padding: '11px 0 9px', borderTop: i ? '1px solid var(--line)' : undefined }}>
+            <div className="row" style={{ justifyContent: 'space-between', marginBottom: 9 }}>
+              <div className="row" style={{ gap: 8 }}>
+                <span style={{ width: 9, height: 9, borderRadius: 3, background: l.color, flex: 'none' }} />
+                <b style={{ fontSize: 14.5 }}>{l.label}</b>
+                <span className="num" style={{ color: 'var(--ink-faint)', fontSize: 13, fontWeight: 800 }}>{l.players.length}</span>
+              </div>
+              {l.players.length < l.min && (
+                <span className="chip" style={{ background: 'color-mix(in srgb, var(--loss) 15%, transparent)', color: 'var(--loss)', fontSize: 12 }}>
+                  צריך תגבור
+                </span>
+              )}
+            </div>
+            <div className="row" style={{ flexWrap: 'wrap', gap: 7 }}>
+              {l.players.map(p => <PlayerChip key={p.id} p={p} onClick={() => onOpen(p)} />)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** One player as a tappable pill: rating, name, position. */
+function PlayerChip({ p, onClick }: { p: Player; onClick: () => void }) {
+  const o = overall(p);
+  return (
+    <button onClick={onClick} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 10px 5px 7px',
+      background: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: '9px 9px 9px 3px',
+    }}>
+      <b className="num" style={{ color: ovrColor(o), fontWeight: 900, fontSize: 14 }}>{o}</b>
+      <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)' }}>{surname(p.name)}</span>
+      <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--ink-faint)' }}>{p.position}</span>
+    </button>
   );
 }
 
