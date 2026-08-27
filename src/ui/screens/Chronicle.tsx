@@ -12,7 +12,7 @@ export function ChronicleScreen({ gs, onBack }: { gs: G.GameState; onBack: () =>
 
   return (
     <>
-      <Meters {...gs.meters} />
+      <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 13 }}>
         <div className="row" style={{ gap: 10, marginTop: 2 }}>
           <Icon name="clipboard" size={22} color="var(--gold)" />

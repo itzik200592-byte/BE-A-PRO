@@ -20,7 +20,7 @@ export function CaptainScreen({ gs, onSet, onBack }: {
 
   return (
     <>
-      <Meters {...gs.meters} />
+      <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 12 }}>
         <div className="row" style={{ gap: 10, marginTop: 2 }}>
           <Icon name="star" size={22} color="var(--gold)" />

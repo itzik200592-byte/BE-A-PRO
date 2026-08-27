@@ -27,7 +27,7 @@ export function Hub({ gs, onStart, onSquad, onTransfers, onChronicle, onCaptain,
 
   return (
     <>
-      <Meters {...gs.meters} />
+      <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 13 }}>
         {/* identity */}
         <div className="row" style={{ marginTop: 2 }}>

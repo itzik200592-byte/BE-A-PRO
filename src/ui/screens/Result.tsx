@@ -27,7 +27,7 @@ export function ResultScreen({ gs, onContinue }: { gs: G.GameState; onContinue: 
 
   return (
     <>
-      <Meters {...gs.meters} />
+      <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack" style={{ gap: 14 }}>
         <div className="tile" style={{ textAlign: 'center', borderColor: color }}>
           <div className="row" style={{ justifyContent: 'center', gap: 14 }}>

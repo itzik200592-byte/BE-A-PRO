@@ -28,7 +28,7 @@ export function TacticScreen({ gs, onSet, onGo }: {
 
   return (
     <>
-      <Meters {...gs.meters} />
+      <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 16 }}>
         <div className="row" style={{ marginTop: 2, gap: 10 }}>
           <Icon name="clipboard" size={22} color="var(--gold)" />

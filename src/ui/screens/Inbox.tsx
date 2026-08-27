@@ -21,7 +21,7 @@ export function InboxScreen({ gs, onAnswer, onDismissOutcome, onBack }: {
 
   return (
     <>
-      <Meters {...gs.meters} />
+      <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 13 }}>
         <div className="row" style={{ justifyContent: 'space-between', marginTop: 2 }}>
           <span className="eyebrow">תיבת הודעות</span>

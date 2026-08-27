@@ -62,7 +62,7 @@ export function TransfersScreen({ gs, onSign, onSell, onBack }: {
 
   return (
     <>
-      <Meters {...gs.meters} />
+      <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 12 }}>
         <div className="row" style={{ marginTop: 2 }}>
           <div style={{ flex: 1 }}>

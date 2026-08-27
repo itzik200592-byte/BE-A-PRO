@@ -46,7 +46,7 @@ export function PreSeasonMarket({
   if (gs.pendingOutcome != null) {
     return (
       <>
-        <Meters {...gs.meters} />
+        <Meters {...gs.meters} gems={gs.gems} />
         <div className="screen pad stack pad-b" style={{ gap: 13 }}>
           <span className="eyebrow" style={{ marginTop: 2 }}>קיץ · מחזור {gs.preWeek} מתוך {PRE_ROUNDS}</span>
           <div style={{ display: 'flex', justifyContent: 'flex-start', animation: 'riseIn var(--t-mid) var(--ease-out)' }}>
@@ -69,7 +69,7 @@ export function PreSeasonMarket({
 
   return (
     <>
-      <Meters {...gs.meters} />
+      <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 13, minHeight: '100%' }}>
         {firstCareer && <Stepper current={5} />}
 

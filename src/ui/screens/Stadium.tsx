@@ -35,7 +35,7 @@ export function StadiumScreen({ gs, onBuild, onBack }: {
 
   return (
     <>
-      <Meters {...gs.meters} />
+      <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 13 }}>
         <div className="row" style={{ gap: 10, marginTop: 2 }}>
           <Icon name="flag" size={22} color="var(--gold)" />

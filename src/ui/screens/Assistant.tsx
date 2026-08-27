@@ -18,7 +18,7 @@ export function AssistantScreen({ gs, onHire, onFire, onBack }: {
 
   return (
     <>
-      <Meters {...gs.meters} />
+      <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 13 }}>
         <div className="row" style={{ gap: 10, marginTop: 2 }}>
           <Icon name="mic" size={22} color="var(--sky)" />

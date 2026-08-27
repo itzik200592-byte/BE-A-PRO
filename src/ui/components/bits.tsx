@@ -1,13 +1,18 @@
 import type { Club } from '../../data/clubs.ts';
 import { Crest } from './Crest.tsx';
 import { Icon } from './Icon.tsx';
+import { Gem } from './Gem.tsx';
 
 /** Every club mark in the game is the vector crest. */
 export function Badge({ club, size = 44 }: { club: Club; size?: number }) {
   return <Crest club={club} size={size} />;
 }
 
-export function Meters({ money, morale, prestige }: { money: number; morale: number; prestige: number }) {
+export function Meters({ money, morale, prestige, gems }: {
+  money: number; morale: number; prestige: number;
+  /** premium currency, shown as a compact pill when provided */
+  gems?: number;
+}) {
   return (
     <div className="meters">
       <Meter icon="coins" label="תקציב" value={formatMoney(money)} pct={100} color="var(--gold)" />
@@ -16,6 +21,17 @@ export function Meters({ money, morale, prestige }: { money: number; morale: num
         icon="flame" label="מורל" value={String(morale)} pct={morale}
         color={morale >= 55 ? 'var(--win)' : morale >= 35 ? 'var(--gold)' : 'var(--loss)'}
       />
+      {gems !== undefined && <GemPill n={gems} />}
+    </div>
+  );
+}
+
+/** The gem balance, always on screen so the premium currency reads as real. */
+function GemPill({ n }: { n: number }) {
+  return (
+    <div className="gem-pill" title="יהלומים">
+      <Gem size={19} />
+      <span className="v num">{n}</span>
     </div>
   );
 }

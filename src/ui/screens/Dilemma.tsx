@@ -29,7 +29,7 @@ export function DilemmaChat({ gs, onChoose, onContinue }: {
 
   return (
     <>
-      <Meters {...gs.meters} />
+      <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 14 }}>
         <div className="row" style={{ justifyContent: 'space-between', marginTop: 2 }}>
           <span className="eyebrow">לפני המשחק</span>

@@ -19,7 +19,7 @@ export function PressScreen({ gs, onAnswer }: { gs: G.GameState; onAnswer: (i: n
 
   return (
     <>
-      <Meters {...gs.meters} />
+      <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 14 }}>
         <div className="row" style={{ marginTop: 4, justifyContent: 'space-between' }}>
           <span className="eyebrow">מסיבת עיתונאים</span>
