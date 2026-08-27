@@ -388,6 +388,19 @@ input{font-family:inherit;}
   animation:momentIn .34s var(--ease-out);
   overscroll-behavior:contain;
 }
+/* card-led header: the collectible is the hero, on a floodlit ground */
+.pcard-hero{
+  position:relative;
+  padding:20px 15px 16px;
+  border-bottom:1px solid var(--line);
+  background:radial-gradient(90% 70% at 50% 0%, rgba(233,185,73,.12), transparent 66%);
+}
+.pcard-close{
+  position:absolute; top:12px; inset-inline-end:12px; z-index:2;
+  width:34px; height:34px; border-radius:10px;
+  background:rgba(255,255,255,.06); border:1px solid var(--line-2);
+  display:grid; place-items:center; color:var(--ink-dim);
+}
 .pcard-head{
   position:relative; overflow:hidden;
   padding:16px 15px 15px;

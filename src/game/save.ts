@@ -10,6 +10,7 @@
 import type { GameState, PlayerSeason } from './state.ts';
 import { STADIUM_START } from './career.ts';
 import { GEMS_AT_START } from './packs.ts';
+import { primePlayerIds } from '../data/squadGen.ts';
 
 const KEY = 'beapro.career.v1';
 const VERSION = 1;
@@ -64,6 +65,10 @@ export function loadCareer(): GameState | null {
       playerById.set(p.id, { name: p.name, clubId: cid });
     }
   }
+  // prime the id counter past every id in the save, so a pack pull or next
+  // season's market never mints an id that collides with an existing player
+  const allIds: string[] = [...playerById.keys(), ...(s.market ?? []).map(f => f.player.id)];
+  primePlayerIds(allIds);
   // gracefully fill fields added in later versions so old saves keep working
   const patched: GameState = {
     ...s,

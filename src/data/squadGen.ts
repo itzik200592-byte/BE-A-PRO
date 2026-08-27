@@ -31,6 +31,20 @@ function attrFor(position: Position, base: number, rng: Rng): Player['attrs'] {
 let counter = 0;
 export function nextPlayerId(): string { return `p${counter++}`; }
 
+/**
+ * The counter above is module state, so it resets to 0 on a page reload while
+ * the ids it minted are persisted in the save. Any player generated after a
+ * reload, a pack pull or the next season's market, would then reuse a low id
+ * and collide with someone already in the game. On load we prime the counter
+ * past every id we can see, so fresh ids are always unique.
+ */
+export function primePlayerIds(ids: Iterable<string>): void {
+  for (const id of ids) {
+    const m = /^p(\d+)$/.exec(id);
+    if (m) counter = Math.max(counter, Number(m[1]) + 1);
+  }
+}
+
 export function makePlayer(
   position: Position, base: number, rng: Rng,
   traits: ClubTraits = NEUTRAL_TRAITS,
