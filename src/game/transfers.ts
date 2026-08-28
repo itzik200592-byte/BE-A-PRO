@@ -2,6 +2,7 @@ import type { Player, Position, Rng } from '../engine/matchEngine.ts';
 import { overall } from '../engine/matchEngine.ts';
 import { makePlayer, playerValue, NEUTRAL_TRAITS } from '../data/squadGen.ts';
 import { leagueCeiling } from '../data/clubs.ts';
+import { playerWage } from './career.ts';
 
 /**
  * Transfer windows during the league. The summer's business now happens in the
@@ -67,16 +68,29 @@ export function makeMarket(tier: number, rng: Rng, size = 12, taken?: Set<string
     const notes = player.age <= 21 ? NOTES_YOUNG : player.age >= 31 ? NOTES_OLD : NOTES_PRIME;
     out.push({
       player,
-      fee: playerValue(player),
+      fee: transferFee(player, tier),
       note: notes[Math.floor(rng() * notes.length)],
     });
   }
   return out.sort((a, b) => overall(b.player) - overall(a.player));
 }
 
-/** What you get back when you let a player go. */
-export function sellPrice(p: Player): number {
-  return Math.round(playerValue(p) * 0.8);
+/**
+ * Transfer fees scale hard with the division. ליגה ג׳ is amateur, players move
+ * for next to nothing, and only near the top does a real market exist. This is
+ * what keeps the lower leagues feeling like free, no-contract football, and
+ * makes signing a genuine cost only once you are climbing.
+ */
+const FEE_SCALE: Record<number, number> = { 1: 0.05, 2: 0.16, 3: 0.4, 4: 0.7, 5: 1.0 };
+
+export function transferFee(p: Player, tier: number): number {
+  const scale = FEE_SCALE[Math.max(1, Math.min(5, Math.round(tier)))] ?? 1;
+  return Math.round((playerValue(p) * scale) / 1000) * 1000;
+}
+
+/** What you get back when you let a player go, on the same tier-scaled market. */
+export function sellPrice(p: Player, tier: number): number {
+  return Math.round(transferFee(p, tier) * 0.8);
 }
 
 /** Proposed contract terms for a signing, derived from rating and age. */
@@ -86,10 +100,10 @@ export interface ContractTerms {
   signOn: number;        // one time signing fee, the transfer fee
 }
 
-export function contractTerms(fa: FreeAgent): ContractTerms {
+export function contractTerms(fa: FreeAgent, tier: number): ContractTerms {
   const age = fa.player.age;
   const years = age <= 23 ? 3 : age >= 31 ? 1 : 2;
-  // weekly wage tracks the size of the deal, rounded to a clean hundred
-  const wage = Math.max(300, Math.round((fa.fee * 0.006) / 100) * 100);
+  // the weekly wage is the division's wage, not a slice of the fee
+  const wage = playerWage(fa.player, tier);
   return { wagePerWeek: wage, years, signOn: fa.fee };
 }

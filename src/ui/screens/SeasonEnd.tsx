@@ -282,8 +282,9 @@ export function PreSeasonScreen({ gs, onStart }: { gs: G.GameState; onStart: () 
   const c = G.club(gs);
   if (!r) return null;
   // wages are paid week by week during the season now, so the summer books are
-  // the prize money against what the coming squad will cost you every week
-  const weekly = Math.round(r.wages / 14);
+  // the prize money against what the coming squad will cost you every week.
+  // report.wages is already the weekly bill.
+  const weekly = r.wages;
   return (
     <div className="screen pad stack pad-b" style={{ gap: 13, minHeight: '100%' }}>
       <div className="row" style={{ gap: 10, marginTop: 10 }}>

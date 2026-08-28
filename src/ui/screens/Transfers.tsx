@@ -27,6 +27,7 @@ export function TransfersScreen({ gs, onSign, onSell, onBack }: {
   const [lineFilter, setLineFilter] = useState<G.MarketLine | 'all'>(gs.marketFocus ?? 'all');
   const win = G.transferWindow(gs);
   const sq = G.mySquad(gs);
+  const myTier = G.club(gs).tier;
   const size = G.squadSize(gs);
 
   // personalities: my squad as one group, the market as its own group
@@ -57,7 +58,7 @@ export function TransfersScreen({ gs, onSign, onSell, onBack }: {
     const reason = G.sellBlockedReason(gs);
     if (reason) { setMsg(reason); return; }
     onSell(id);
-    setMsg(`${p.name} נמכר תמורת ${formatMoney(sellPrice(p))}.`);
+    setMsg(`${p.name} נמכר תמורת ${formatMoney(sellPrice(p, myTier))}.`);
   }
 
   return (
@@ -145,7 +146,7 @@ export function TransfersScreen({ gs, onSign, onSell, onBack }: {
                   <div className="row" style={{ gap: 10, padding: '10px 8px 0' }}>
                     <div style={{ flex: 1 }}>
                       <div className="sub" style={{ fontSize: 12.5 }}>תקבל</div>
-                      <div className="num" style={{ fontWeight: 900, fontSize: 16, color: 'var(--win)' }}>{formatMoney(sellPrice(p))}</div>
+                      <div className="num" style={{ fontWeight: 900, fontSize: 16, color: 'var(--win)' }}>{formatMoney(sellPrice(p, myTier))}</div>
                     </div>
                     <button className="btn ghost" style={{ width: 'auto', padding: '12px 22px', fontSize: 16 }}
                       disabled={!!blocked} onClick={() => trySell(p.id)}>
@@ -165,6 +166,7 @@ export function TransfersScreen({ gs, onSign, onSell, onBack }: {
       {offer && (
         <ContractSheet
           fa={offer}
+          tier={myTier}
           budget={gs.meters.money}
           onCancel={() => setOffer(null)}
           onConfirm={confirmOffer}
@@ -178,11 +180,11 @@ export function TransfersScreen({ gs, onSign, onSell, onBack }: {
   );
 }
 
-function ContractSheet({ fa, budget, onCancel, onConfirm }: {
-  fa: FreeAgent; budget: number; onCancel: () => void; onConfirm: () => void;
+function ContractSheet({ fa, tier, budget, onCancel, onConfirm }: {
+  fa: FreeAgent; tier: number; budget: number; onCancel: () => void; onConfirm: () => void;
 }) {
   const o = overall(fa.player);
-  const terms = contractTerms(fa);
+  const terms = contractTerms(fa, tier);
   const p = fa.player;
 
   return (

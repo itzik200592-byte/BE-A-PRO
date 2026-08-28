@@ -100,7 +100,7 @@ export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: st
     const me = region.clubs.find(c => c.id === region.myId)!;
     const derby = region.clubs.find(c => c.id === region.derbyId)!;
     const rest = region.clubs.filter(c => c.id !== me.id);
-    const budget = Math.round(400_000 * m.budgetBias * me.traits.budget);
+    const budget = Math.round(G.START_MONEY * m.budgetBias * me.traits.budget);
     return { me, derby, rest, budget };
   }, [chosen, m]);
 

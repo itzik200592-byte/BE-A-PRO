@@ -195,7 +195,7 @@ export const ASSISTANT_LEAVES_TIER = 3;   // ליגה א'
 
 const ASSISTANT_NAMES = ['שוקי', 'בוזי', 'ג׳קי', 'מוטי', 'ציון', 'פפו'];
 
-const START_MONEY = 400_000;
+export const START_MONEY = 75_000;
 
 /** Manager age changes how the dressing room and the boardroom treat you. */
 export function ageProfile(age: number) {
@@ -339,7 +339,10 @@ export function enterPreseason(gs: GameState): GameState {
   const contracts: Record<string, number> = {};
   for (const id of ids) {
     if (id in gs.contracts) contracts[id] = clamp(gs.contracts[id] - 1, 0, 5);
-    else if (firstEver) contracts[id] = clamp(seedContract(id) - 1, 0, 5);  // opening squad, some out of deal
+    // the opening squad gets full 1..3 year deals, so nobody expires in the
+    // first summer. Contracts only bite from the second season, once these
+    // have ticked down, which keeps ליגה ג׳ amateur to begin with.
+    else if (firstEver) contracts[id] = seedContract(id);
     else contracts[id] = 3;   // a kid up from the youth signs a three year deal
   }
   return { ...gs, phase: 'preseason-market', preWeek: 1, preResolved: [], contracts, pendingOutcome: null };
@@ -439,14 +442,19 @@ export function preseasonEvents(gs: GameState): PreEvent[] {
     const star = starTarget(sq);
     if (star) { out.push({ id: 'dep-star', kind: 'star', player: star, amount: starFee(star) }); inSaga.add(star.id); }
   }
-  if (!done.has('dep-young')) {
-    const young = youngTarget(sq);
-    if (young) { out.push({ id: 'dep-young', kind: 'young', player: young, amount: raiseBonus(young) }); inSaga.add(young.id); }
-  }
-  if (gs.preWeek >= 2) {
-    for (const p of expiringPlayers(gs)) {
-      if (inSaga.has(p.id)) continue;
-      if (!done.has(`renew-${p.id}`)) out.push({ id: `renew-${p.id}`, kind: 'renew', player: p, amount: renewTerms(p).signOn });
+  // the whole contract business, raises and renewals, only starts the second
+  // summer. The first season is amateur ליגה ג׳ football: no contracts, just
+  // build a squad. It gives the player a clean first year before the paperwork.
+  if (gs.season >= 2) {
+    if (!done.has('dep-young')) {
+      const young = youngTarget(sq);
+      if (young) { out.push({ id: 'dep-young', kind: 'young', player: young, amount: raiseBonus(young) }); inSaga.add(young.id); }
+    }
+    if (gs.preWeek >= 2) {
+      for (const p of expiringPlayers(gs)) {
+        if (inSaga.has(p.id)) continue;
+        if (!done.has(`renew-${p.id}`)) out.push({ id: `renew-${p.id}`, kind: 'renew', player: p, amount: renewTerms(p, club(gs).tier).signOn });
+      }
     }
   }
   return out;
@@ -533,7 +541,7 @@ export function renewContract(gs: GameState, playerId: string): GameState {
   const sq = mySquad(gs);
   const p = [...sq.starters, ...sq.bench].find(x => x.id === playerId);
   if (!p) return gs;
-  const terms = renewTerms(p);
+  const terms = renewTerms(p, club(gs).tier);
   const contracts = { ...gs.contracts, [playerId]: terms.years };
   return {
     ...gs, contracts,
@@ -715,7 +723,7 @@ export function signPlayer(gs: GameState, playerId: string): GameState {
     ...next,
     meters: { ...gs.meters, money: gs.meters.money - fa.fee },
     market: gs.market.filter(f => f.player.id !== playerId),
-    contracts: { ...gs.contracts, [fa.player.id]: contractTerms(fa).years },
+    contracts: { ...gs.contracts, [fa.player.id]: contractTerms(fa, club(gs).tier).years },
   };
 }
 
@@ -734,7 +742,7 @@ export function sellPlayer(gs: GameState, playerId: string): GameState {
   const next = writeSquad(gs, { starters: sq.starters, bench: sq.bench.filter(x => x.id !== playerId) });
   return {
     ...next,
-    meters: { ...gs.meters, money: gs.meters.money + sellPrice(p) },
+    meters: { ...gs.meters, money: gs.meters.money + sellPrice(p, club(gs).tier) },
   };
 }
 

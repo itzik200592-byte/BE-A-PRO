@@ -14,6 +14,8 @@ import { overall } from '../engine/matchEngine.ts';
 import type { Squad } from '../data/squadGen.ts';
 import { playerValue } from '../data/squadGen.ts';
 import type { ContractTerms } from './transfers.ts';
+import { transferFee } from './transfers.ts';
+import { playerWage } from './career.ts';
 
 export const PRE_ROUNDS = 3;
 
@@ -42,11 +44,10 @@ export function contractYears(contracts: Record<string, number>, id: string): nu
 
 /** Terms offered to keep a player who is already yours. Cheaper than the open
  *  market, because loyalty is worth a small discount. */
-export function renewTerms(p: Player): ContractTerms {
-  const value = playerValue(p);
+export function renewTerms(p: Player, tier: number): ContractTerms {
   const years = p.age <= 23 ? 3 : p.age >= 31 ? 1 : 2;
-  const signOn = Math.round((value * 0.12) / 1000) * 1000;   // a loyalty bonus, not a full fee
-  const wage = Math.max(300, Math.round((value * 0.006) / 100) * 100);
+  const signOn = Math.round((transferFee(p, tier) * 0.15) / 1000) * 1000;   // a loyalty bonus, not a full fee
+  const wage = playerWage(p, tier);
   return { wagePerWeek: wage, years, signOn };
 }
 

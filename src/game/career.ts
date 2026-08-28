@@ -251,7 +251,10 @@ export function fillWithYouth(squad: Squad, rng: Rng, tier: number, minSquad: nu
 
 /** Season payout, it has to grow with the division or promotion bankrupts you. */
 export function seasonPurse(tier: number, position: number, teams: number, promoted = false): number {
-  const base = [0, 320_000, 700_000, 1_600_000, 3_600_000, 8_000_000][Math.min(tier, TOP_TIER)];
+  // recalibrated down for the weekly-wage economy. Wages are now the dominant,
+  // fixed cost, so income is a participation purse that a bad season cannot
+  // cover on its own, forcing you to actually run the club.
+  const base = [0, 90_000, 240_000, 700_000, 1_800_000, 4_500_000][Math.min(tier, TOP_TIER)];
   const share = 1 + (teams - position) * 0.12;   // finishing higher pays more
   // going up brings sponsors and television money, which is what funds the
   // rebuild you now urgently need for a division that is a level above you
@@ -259,25 +262,48 @@ export function seasonPurse(tier: number, position: number, teams: number, promo
   return Math.round(base * share * promotionBonus);
 }
 
-/** Per match prize, also scaled by division. */
+/** Per match prize, also scaled by division. Results, not the purse, are what
+ *  swing a season from black to red. */
 export function matchPrize(tier: number, result: 'W' | 'D' | 'L'): number {
-  const mul = [1, 1, 1.8, 3.2, 5.5, 9][Math.min(tier, TOP_TIER)];
-  const base = result === 'W' ? 90_000 : result === 'D' ? 40_000 : 18_000;
+  const mul = [1, 1, 1.9, 3.4, 6, 11][Math.min(tier, TOP_TIER)];
+  const base = result === 'W' ? 45_000 : result === 'D' ? 16_000 : 4_000;
   return Math.round(base * mul);
 }
 
 /**
- * The wage bill for a season. Without this the prize money just piles up and
- * every decision in the market becomes free, which is the fastest way to make
- * an economy meaningless. Better players cost sharply more, so a bloated squad
- * of veterans is a real problem you have to solve by selling.
+ * Weekly wage, driven by the DIVISION first and the player second, because that
+ * is how football actually pays: a ליגה ג׳ side is amateur money no matter how
+ * good its best player is, while a ליגת העל star is on a different planet. Each
+ * tier has a weekly band, and a player sits inside it by how he rates against
+ * his league. Kept as clean hundreds so the numbers read like real contracts.
+ *
+ *   ג׳ / ב׳   up to ~5K
+ *   א׳        7–12K
+ *   לאומית    12–15K
+ *   על        25–100K, the star tax
  */
-export function playerWage(p: Player): number {
-  return Math.round(Math.pow(overall(p), 2.2) * 5.5);
+const WAGE_BAND: Record<number, [number, number]> = {
+  1: [500, 5_000],
+  2: [1_000, 5_000],
+  3: [7_000, 12_000],
+  4: [12_000, 15_000],
+  5: [25_000, 100_000],
+};
+
+export function playerWage(p: Player, tier: number): number {
+  const t = Math.max(1, Math.min(TOP_TIER, Math.round(tier)));
+  const [lo, hi] = WAGE_BAND[t];
+  const ceiling = leagueCeiling(t);
+  // where he sits in the division's rating span, 0 (fringe) .. 1 (star)
+  const frac = Math.max(0, Math.min(1, (overall(p) - (ceiling - 10)) / 18));
+  // eased so most of a squad sits low and only the best spike, hardest at the top
+  const eased = Math.pow(frac, t >= 4 ? 2 : 1.4);
+  return Math.round((lo + (hi - lo) * eased) / 100) * 100;
 }
 
-export function wageBill(squad: Squad): number {
-  return [...squad.starters, ...squad.bench].reduce((s, p) => s + playerWage(p), 0);
+/** Total weekly wages for a squad in a division. */
+export function wageBill(squad: Squad, tier: number): number {
+  return [...squad.starters, ...squad.bench].reduce((s, p) => s + playerWage(p, tier), 0);
 }
 
 /* ------------------------------------------------------- running the club */
@@ -290,8 +316,8 @@ export function wageBill(squad: Squad): number {
  * defeat bleeds harder. The annual wage total is unchanged, it is simply paid
  * weekly, where the manager can feel it.
  */
-export const PITCH_UPKEEP = [0, 12_000, 22_000, 40_000, 70_000, 130_000];
-export const SECURITY_HOME = [0, 18_000, 32_000, 58_000, 100_000, 185_000];
+export const PITCH_UPKEEP = [0, 4_000, 14_000, 32_000, 62_000, 120_000];
+export const SECURITY_HOME = [0, 5_000, 20_000, 46_000, 92_000, 175_000];
 
 export interface RoundCosts {
   wages: number;
@@ -304,7 +330,8 @@ export function roundCosts(input: {
   squad: Squad; tier: number; isHome: boolean; isDerby: boolean; rounds: number;
 }): RoundCosts {
   const t = Math.max(0, Math.min(TOP_TIER, input.tier));
-  const wages = Math.round(wageBill(input.squad) / Math.max(1, input.rounds));
+  // wages are genuinely weekly now, so a round pays one week of them
+  const wages = wageBill(input.squad, t);
   const pitch = PITCH_UPKEEP[t];
   // stewards are only paid when you are the host, and a derby needs more of them
   const security = input.isHome ? Math.round(SECURITY_HOME[t] * (input.isDerby ? 1.8 : 1)) : 0;
@@ -473,7 +500,7 @@ export function buildNextSeason(input: {
     report: {
       tier, position, result, newTier,
       purse: seasonPurse(tier, position, teams, promoted),
-      wages: wageBill(aged.squad),
+      wages: wageBill(aged.squad, newTier),
       retired: aged.retired,
       risers: aged.risers.sort((a, b) => (b.to - b.from) - (a.to - a.from)).slice(0, 4),
       fallers: aged.fallers.sort((a, b) => (a.to - a.from) - (b.to - b.from)).slice(0, 3),
