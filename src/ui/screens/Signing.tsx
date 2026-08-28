@@ -19,19 +19,22 @@ interface Answer {
 
 const ANSWERS: Answer[] = [
   {
-    label: 'באתי לעלות ליגה, בלי לגמגם',
-    effect: { prestige: +6, morale: +2 },
-    reply: 'הכותרת מחר כבר כתובה. עכשיו כולם מחכים לראות אותך עומד בזה.',
+    // bold public claim: raises your standing but piles pressure on the room
+    label: 'הביאו אותי בשביל לעלות ליגה, אין שאלה בכלל',
+    effect: { prestige: +7, morale: -2 },
+    reply: 'איזה ביטחון בקבוצה, אתה לוקח לא מעט על עצמך. מה שבטוח יש לנו כותרת לעיתון של שישי.',
   },
   {
-    label: 'קודם נכיר את השחקנים, ואז נדבר',
-    effect: { morale: +6, prestige: -1 },
-    reply: 'בחדר ההלבשה שמעו את זה ואהבו. אין הבטחות שאי אפשר לעמוד בהן.',
+    // humble and calm: the room relaxes, but the press reads it as unsure
+    label: 'מוקדם מדי להבטחות, נכיר את הסגל ורק אחר כך נדבר',
+    effect: { morale: +6, prestige: -3 },
+    reply: 'נשמע שאתה קצת חסר ביטחון, נרשום את זה בעיתון של שישי.',
   },
   {
-    label: 'המועדון הזה גדול מכולנו',
-    effect: { prestige: +3, morale: +3 },
-    reply: 'תשובה שמצאה חן בעיני היציע. בעלי המנויים כבר מדברים עליך יפה.',
+    // the local, heartfelt line: between the two, no headline but real warmth
+    label: 'אני גר בעיר הזאת ואעשה הכל כדי להצליח',
+    effect: { prestige: +2, morale: +4 },
+    reply: 'תשובה רגילה, לא נתת לנו כותרת. נרשום רק שחתמת במועדון בעיתון שישי, בהצלחה.',
   },
 ];
 
