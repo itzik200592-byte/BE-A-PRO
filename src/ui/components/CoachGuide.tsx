@@ -1,18 +1,21 @@
 import { asset } from '../asset.ts';
 
 /**
- * The coach who walks you through the opening. Top Eleven leans on a talking
- * head that guides the first minutes and makes them feel personal and premium;
- * this is our version, the game's own coach as a recurring presenter with a
- * line at each onboarding step. Uses the coach logo we already ship.
+ * The coach who walks you through the opening, now a living presenter. Top
+ * Eleven leans on a talking head to make the first minutes feel personal and
+ * premium; this is ours, the game's own coach brought to life (a short looping
+ * clip animated from the logo) with a line at each step. Prominent by request.
  */
 export function CoachGuide({ text }: { text: string }) {
   return (
     <div className="coach-guide" style={{ animation: 'riseIn .3s var(--ease-out) both' }}>
-      {/* the logo is a full square, so we zoom into the coach's face rather than
-          shrink the whole shield into the little circle */}
-      <div className="coach-guide-pic" role="img" aria-label="המאמן"
-        style={{ backgroundImage: `url(${asset('/logo.webp')})` }} />
+      <video
+        className="coach-guide-vid"
+        src={asset('/coach/guide.mp4')}
+        poster={asset('/coach/guide.webp')}
+        autoPlay muted loop playsInline preload="auto"
+        aria-label="המאמן"
+      />
       <div className="coach-guide-bubble">
         <div className="coach-guide-name">המאמן</div>
         <div className="coach-guide-text">{text}</div>

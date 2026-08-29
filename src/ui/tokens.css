@@ -448,22 +448,22 @@ input{font-family:inherit;}
 /* wrong-code nudge on the entry gate */
 @keyframes shake{10%,90%{transform:translateX(-1px);}20%,80%{transform:translateX(2px);}30%,50%,70%{transform:translateX(-4px);}40%,60%{transform:translateX(4px);}}
 
-/* the coach who guides the opening, a presenter with a line per step */
+/* the coach who guides the opening, a living presenter that leads the screen */
 .coach-guide{
-  display:flex; align-items:center; gap:12px;
-  background:linear-gradient(100deg, color-mix(in srgb, var(--gold) 12%, var(--surface-2)), var(--surface));
-  border:1px solid color-mix(in srgb, var(--gold) 26%, transparent);
-  border-radius:var(--plate-sm); padding:11px 13px;
+  display:flex; align-items:center; gap:14px;
+  background:linear-gradient(100deg, color-mix(in srgb, var(--gold) 13%, var(--surface-2)), var(--surface));
+  border:1px solid color-mix(in srgb, var(--gold) 28%, transparent);
+  border-radius:var(--plate); padding:13px 15px;
 }
-.coach-guide-pic{
-  flex:none; width:52px; height:52px; border-radius:50%;
-  border:2px solid var(--gold); background:var(--bg) no-repeat;
-  background-size:213%; background-position:44% 20%;   /* zoomed to the face */
-  box-shadow:0 4px 12px rgba(0,0,0,.4);
+.coach-guide-vid{
+  flex:none; width:104px; height:104px; border-radius:50%; object-fit:cover;
+  border:2.5px solid var(--gold); background:var(--bg);
+  box-shadow:0 6px 18px rgba(0,0,0,.5), 0 0 0 4px color-mix(in srgb,var(--gold) 12%,transparent);
 }
 .coach-guide-bubble{flex:1; min-width:0}
-.coach-guide-name{font-size:11px; font-weight:900; letter-spacing:.06em; color:var(--gold); margin-bottom:3px}
-.coach-guide-text{font-size:14.5px; font-weight:600; line-height:1.45; color:var(--ink)}
+.coach-guide-name{font-size:12px; font-weight:900; letter-spacing:.06em; color:var(--gold); margin-bottom:4px}
+.coach-guide-text{font-size:16px; font-weight:600; line-height:1.5; color:var(--ink)}
+@media (max-width:360px){ .coach-guide-vid{width:88px;height:88px} .coach-guide-text{font-size:15px} }
 
 /* pack opening, the moment the whole gacha rests on */
 @keyframes pack-shake{

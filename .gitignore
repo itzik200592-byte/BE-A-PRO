@@ -8,3 +8,6 @@ src/__*.mts
 pilot/
 PIC/
 *.zip
+
+# reference screen recordings, not part of the app
+IMG_*.MOV
