@@ -39,7 +39,7 @@ import {
 
 export type Phase =
   | 'onboard-manager' | 'onboard-club' | 'signing' | 'squad' | 'hub' | 'transfers'
-  | 'dilemma' | 'tactic' | 'match' | 'result' | 'press' | 'season-end' | 'chronicle'
+  | 'dilemma' | 'tactic' | 'vs' | 'match' | 'result' | 'press' | 'season-end' | 'chronicle'
   | 'captain' | 'assistant' | 'preseason' | 'preseason-market' | 'inbox' | 'chat' | 'table' | 'stadium'
   | 'packs';
 
@@ -1032,6 +1032,34 @@ export function matchupScout(gs: GameState): Scout | null {
         : 'מאבק שקול. הפרטים יכריעו, טקטיקה נכונה ורגע אחד.';
 
   return { oppShort: oppClub.short, mine: Math.round(mine), opp: Math.round(opp), iAmHome, verdict, line };
+}
+
+export interface MatchPreview {
+  home: Club; away: Club;
+  homeOvr: number; awayOvr: number;
+  iAmHome: boolean; isDerby: boolean;
+  myForm: ('W' | 'D' | 'L')[];
+  verdict: Scout['verdict'];
+  line: string;
+}
+
+/** Everything the cinematic VS screen needs before kickoff. */
+export function matchPreview(gs: GameState): MatchPreview | null {
+  const fx = playerFixture(gs);
+  const scout = matchupScout(gs);
+  if (!fx || !scout) return null;
+  const home = gs.league.clubs.find(c => c.id === fx.homeId)!;
+  const away = gs.league.clubs.find(c => c.id === fx.awayId)!;
+  // the starting eleven's real average, same figure the scout and squad screen
+  // use, so the number here matches everywhere else
+  const ovrOf = (id: string) => Math.round(avgStarterOvr(gs.league.squads[id]));
+  return {
+    home, away,
+    homeOvr: ovrOf(fx.homeId), awayOvr: ovrOf(fx.awayId),
+    iAmHome: scout.iAmHome, isDerby: isDerby(fx.homeId, fx.awayId),
+    myForm: gs.form.slice(-5),
+    verdict: scout.verdict, line: scout.line,
+  };
 }
 
 /* --------------------------------------------------------------- the week */
