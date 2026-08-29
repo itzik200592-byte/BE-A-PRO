@@ -68,6 +68,13 @@ function tacticImg(tier: number): string {
   return asset(`/moments/tactic/${band}.webp`);
 }
 
+/** What every moment opens on, so these are the ones that must be there first. */
+const BUILDUP_IMAGES = [
+  PEN_BUILDUP, FK_BUILDUP, SHOT_BUILDUP, ONE_ON_ONE_BUILDUP,
+  DEF_KEEPER_BUILDUP, DEF_TACKLE_BUILDUP,
+  ...['tier1', 'tier2', 'tier3'].map(s => asset(`/moments/tactic/${s}.webp`)),
+];
+
 /** Warm the moment images so the first popup does not flash-load. */
 const MOMENT_IMAGES = [
   PEN_BUILDUP, FK_BUILDUP, SHOT_BUILDUP, ONE_ON_ONE_BUILDUP, DEF_KEEPER_BUILDUP, DEF_TACKLE_BUILDUP, asset('/moments/tactic.webp'),
@@ -80,10 +87,30 @@ const MOMENT_IMAGES = [
   ...['tier1', 'tier2', 'tier3'].map(s => asset(`/moments/tactic/${s}.webp`)),
 ];
 let momentsPrefetched = false;
+/**
+ * Warm the moment art without drowning the connection. Firing every outcome
+ * image at once was several megabytes in parallel, which on a phone meant the
+ * popup at minute 24 could still be waiting on its picture and showed nothing
+ * but the dark fallback. The build ups are what a moment opens on, so they go
+ * first and alone; the outcome frames trickle in behind them, a few at a time.
+ */
 function preloadMoments() {
   if (momentsPrefetched || typeof document === 'undefined') return;
   momentsPrefetched = true;
-  for (const src of MOMENT_IMAGES) { const i = new Image(); i.src = src; }
+
+  const load = (src: string) => new Promise<void>(res => {
+    const i = new Image();
+    i.onload = i.onerror = () => res();
+    i.src = src;
+  });
+
+  const rest = MOMENT_IMAGES.filter(s => !BUILDUP_IMAGES.includes(s));
+  void (async () => {
+    await Promise.all(BUILDUP_IMAGES.map(load));
+    for (let i = 0; i < rest.length; i += 4) {
+      await Promise.all(rest.slice(i, i + 4).map(load));
+    }
+  })();
 }
 
 export function MatchBroadcast({ gs, onDone }: { gs: G.GameState; onDone: (r: MatchResult) => void }) {

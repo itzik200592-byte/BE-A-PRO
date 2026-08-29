@@ -35,6 +35,7 @@ export function UltraCard({ player, club, size = 'm', onPress }: {
     <div
       className={`uk uk-${size}`}
       data-t={rarity}
+      data-bars={showBars ? '1' : '0'}
       role={onPress ? 'button' : undefined}
       tabIndex={onPress ? 0 : undefined}
       onClick={onPress}
@@ -156,6 +157,13 @@ const CSS = `
   padding-inline-start:calc(var(--w)*.074);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 
 .uk-bars{position:absolute;inset-inline:calc(var(--w)*.065);bottom:calc(var(--w)*.04);z-index:2;display:grid;gap:calc(var(--w)*.022)}
+
+/* With the six bars on, they own the bottom 45% of the card, so the nameplate
+   and the figure have to sit above them. Without bars the lower half is free
+   and everything drops back down. Getting this wrong put the name straight
+   through the stats. */
+.uk[data-bars="1"] .uk-plate{bottom:calc(var(--w)*.475)}
+.uk[data-bars="1"] .uk-sil{bottom:calc(var(--w)*.60);width:calc(var(--w)*.52)}
 .uk-bar{display:grid;grid-template-columns:calc(var(--w)*.115) 1fr calc(var(--w)*.095);align-items:center;
   gap:calc(var(--w)*.026);font-size:calc(var(--w)*.041);color:#9fb0a6}
 .uk-track{height:calc(var(--w)*.022);background:rgba(255,255,255,.09);overflow:hidden}

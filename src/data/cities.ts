@@ -31,7 +31,6 @@ export const CITIES: City[] = [
   { name: 'ראשון לציון', lat: 31.96, lon: 34.80, size: 3 },
   { name: 'פתח תקווה', lat: 32.09, lon: 34.89, size: 3 },
   { name: 'חולון', lat: 32.01, lon: 34.77, size: 3 },
-  { name: 'בני ברק', lat: 32.08, lon: 34.83, size: 3 },
   { name: 'רמת גן', lat: 32.07, lon: 34.82, size: 3 },
   { name: 'בת ים', lat: 32.02, lon: 34.75, size: 2 },
   { name: 'גבעתיים', lat: 32.07, lon: 34.81, size: 2 },
@@ -39,7 +38,8 @@ export const CITIES: City[] = [
   { name: 'אור יהודה', lat: 32.03, lon: 34.85, size: 2 },
   { name: 'יהוד', lat: 32.03, lon: 34.89, size: 2 },
   { name: 'ראש העין', lat: 32.09, lon: 34.95, size: 2 },
-  { name: 'אלעד', lat: 32.05, lon: 34.95, size: 2 },
+  { name: 'אורנית', lat: 32.13, lon: 35.03, size: 1 },
+  { name: 'אריאל', lat: 32.10, lon: 35.17, size: 2 },
   { name: 'גני תקווה', lat: 32.06, lon: 34.87, size: 1 },
   { name: 'סביון', lat: 32.05, lon: 34.87, size: 1 },
   { name: 'כפר קאסם', lat: 32.11, lon: 34.98, size: 2 },
@@ -200,7 +200,6 @@ const CURATED: Record<string, CitySpec> = {
   'אילת':      { prefix: 'הפועל', primary: '#e67e22', secondary: '#0b2540', accent: '#ffffff', shape: 'diamond', pattern: 'stripes' },
   'מודיעין':   { prefix: 'מ.ס', name: 'מ.ס מודיעין', short: 'מודיעין', primary: '#1f6fd6', secondary: '#f4e7d8', accent: '#f1c40f', shape: 'shield', pattern: 'half' },
   'בית שמש':   { prefix: 'הפועל', primary: '#c0392b', secondary: '#1a1a1a', accent: '#ffffff', shape: 'shield', pattern: 'sash' },
-  'בני ברק':   { prefix: 'מ.ס', primary: '#1a7a3a', secondary: '#f4e7d8', accent: '#111111', shape: 'shield', pattern: 'stripes' },
 };
 
 const PREFIX_POOL: Prefix[] = ['מ.ס', 'הפועל', 'מכבי', 'בני', 'איחוד', 'צעירי', 'הכוח'];
@@ -294,7 +293,7 @@ const TIER_ROSTER: Record<number, string[]> = {
       'לוד', 'קריית גת', 'רעננה', 'נצרת'],
   // tier 5, ליגת העל — the giants only
   5: ['תל אביב', 'חיפה', 'ירושלים', 'באר שבע', 'אשדוד', 'ראשון לציון', 'פתח תקווה',
-      'נתניה', 'חולון', 'בני ברק', 'רמת גן'],
+      'נתניה', 'חולון', 'רמת גן', 'בת ים'],
 };
 
 /** The clubs of a division above ליגה ג׳, real towns sized to the tier. */
@@ -305,6 +304,18 @@ export function cityClubsForTier(tier: number): Club[] {
     .filter((c): c is City => !!c)
     .map(c => clubFromCity(c, tier));
 }
+
+/**
+ * Real rivalries that beat raw distance. A derby is history, not geometry: the
+ * nearest town on the map is not always the one the terrace actually hates.
+ * Both sides of a pair are also guaranteed a place in each other's division,
+ * otherwise the fixture the rivalry is named for would never be played.
+ */
+const DERBY_OF: Record<string, string> = {
+  'ראש העין': 'אורנית',
+  'אורנית': 'ראש העין',
+  'אריאל': 'אורנית',
+};
 
 /** Rough km distance, good enough to rank neighbours. */
 function distKm(a: City, b: City): number {
@@ -330,11 +341,19 @@ export function nearestCities(city: City, n: number): City[] {
  */
 export function buildRegionLeague(cityName: string, tier = 1): { clubs: Club[]; myId: string; derbyId: string } {
   const city = findCity(cityName) ?? CITIES[0];
-  const all = [city, ...nearestCities(city, 7)];
+  // a named rival is always in the division, even if it is not among the seven
+  // closest, so the derby is a fixture you actually get to play
+  const named = DERBY_OF[city.name] ? findCity(DERBY_OF[city.name]) : undefined;
+  const near = nearestCities(city, 7).filter(c => c.name !== named?.name);
+  const all = [city, ...(named ? [named] : []), ...near].slice(0, 8);
   const clubs = all.map(c => clubFromCity(c, tier));
-  // rival = the nearest OTHER town inside this league, by index so the club and
-  // its city stay aligned
+
+  // rival = the named derby when there is one, otherwise the nearest other town
+  // in this division. Indexed so the club and its city stay aligned.
   for (let i = 0; i < all.length; i++) {
+    const wanted = DERBY_OF[all[i].name];
+    const namedIdx = wanted ? all.findIndex(c => c.name === wanted) : -1;
+    if (namedIdx >= 0) { clubs[i].rivalId = clubs[namedIdx].id; continue; }
     let best = -1, bestD = Infinity;
     for (let j = 0; j < all.length; j++) {
       if (j === i) continue;
