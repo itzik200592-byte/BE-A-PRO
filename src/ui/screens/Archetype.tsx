@@ -16,7 +16,7 @@ export function ArchetypeScreen({ onPick }: { onPick: (id: ManagerId) => void })
   return (
     <div className="screen pad stack pad-b" style={{ gap: 13 }}>
       <Stepper current={1} />
-      <CoachGuide who="owner" text="לפני שנדבר על שמות, ספר לי איזה מאמן אתה. אני רוצה לדעת מה אני מביא למועדון." />
+      <CoachGuide who="owner" text="ברוך הבא, נעים מאוד. אני מנהל הקבוצה, ולפני שאנחנו מתקדמים חשוב לי להבין איזה מאמן אתה. אני צריך לדעת מה אני מביא למועדון." />
 
       <div style={{ marginTop: 2 }}>
         <span className="eyebrow">הרזומה שלך</span>

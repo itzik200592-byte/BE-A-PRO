@@ -30,7 +30,7 @@ export function OnboardManager({ gs, onDone }: { gs: G.GameState; onDone: (p: G.
   return (
     <div className="screen pad stack pad-b" style={{ gap: 16, minHeight: '100%' }}>
       <Stepper current={2} />
-      <CoachGuide who="owner" text="ברוך הבא. אני מנהל הקבוצה, ואני זה שהביא אותך לכאן. תכף נצא לדרך, אבל קודם, איך קוראים לך?" />
+      <CoachGuide who="owner" text="בדיוק את הסוג הזה חיפשנו. עכשיו נסדר את הניירת, איך קוראים לך?" />
       <div style={{ marginTop: 'clamp(4px,2vh,20px)' }}>
         <span className="eyebrow">BE A PRO</span>
         <h1 className="h1" style={{ marginTop: 12 }}>איך קוראים לך?</h1>
