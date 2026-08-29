@@ -61,6 +61,42 @@ function ordered(players: Player[]): Player[] {
 
 interface Slot { id: string; home: boolean; i: number }
 interface Pt { x: number; y: number }
+
+/**
+ * Push players out of each other. A pitch is 105m wide and a player is about a
+ * metre across, and two of them are never in the same place, so a couple of
+ * relaxation passes keep bodies apart without fighting the movement above.
+ * The man on the ball holds his ground, everyone else gives way around him,
+ * which is what makes a challenge read as a challenge.
+ */
+const MIN_SEP = 0.036;        // roughly four metres between shoulders
+const MIN_SEP_SQ = MIN_SEP * MIN_SEP;
+
+function separate(all: { sl: Slot; p: Pt }[], holder: string | null) {
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 0; i < all.length; i++) {
+      for (let j = i + 1; j < all.length; j++) {
+        const a = all[i], b = all[j];
+        // keepers stay in their goal, they are not jostled out of it
+        if (a.sl.i === 0 || b.sl.i === 0) continue;
+        let dx = b.p.x - a.p.x, dy = b.p.y - a.p.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= MIN_SEP_SQ) continue;
+        let d = Math.sqrt(d2);
+        if (d < 1e-5) { dx = (i % 2 ? 1 : -1) * 1e-3; dy = 1e-3; d = Math.hypot(dx, dy); }
+        const push = (MIN_SEP - d) / d * 0.5;
+        const aHold = a.sl.id === holder, bHold = b.sl.id === holder;
+        // whoever has the ball is not shoved off it
+        const aw = aHold ? 0 : bHold ? 1 : 0.5;
+        const bw = bHold ? 0 : aHold ? 1 : 0.5;
+        a.p.x = clamp(a.p.x - dx * push * 2 * aw, 0.02, 0.98);
+        a.p.y = clamp(a.p.y - dy * push * 2 * aw, 0.04, 0.96);
+        b.p.x = clamp(b.p.x + dx * push * 2 * bw, 0.02, 0.98);
+        b.p.y = clamp(b.p.y + dy * push * 2 * bw, 0.04, 0.96);
+      }
+    }
+  }
+}
 type B_After = '' | 'corner' | 'goalkick' | 'cross';
 
 const reduceMotion = typeof window !== 'undefined'
@@ -226,7 +262,6 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
       const all: { sl: Slot; p: Pt }[] = [];
 
       for (const sl of slotsRef.current) {
-        const node = nodes.current.get(sl.id);
         const att = sl.home ? playX : 1 - playX;
         const slot = SLOTS[sl.i] ?? SLOTS[9];
         const back = 0.06 + att * 0.46;
@@ -259,27 +294,45 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
           laneY = mix(slot.y + rn.y * live, playY, shift + surge);
         }
 
-        const jx = Math.sin(t * (0.7 + sl.i * 0.07) + sl.i * 1.7) * 0.015;
-        const jy = Math.cos(t * (0.9 + sl.i * 0.05) + sl.i * 2.3) * 0.026;
+        // a small idle drift so nobody stands frozen, but far gentler than the
+        // old wobble, which read as vibration rather than a player adjusting
+        const jx = Math.sin(t * (0.5 + sl.i * 0.05) + sl.i * 1.7) * 0.006;
+        const jy = Math.cos(t * (0.6 + sl.i * 0.04) + sl.i * 2.3) * 0.010;
         let tX = clamp((sl.home ? ownX : 1 - ownX) + jx, 0.03, 0.97);
         let tY = off ? laneY : clamp(laneY + jy, 0.06, 0.94);
         let sp = off ? 0.9 : 2.0 + (sl.i % 5) * 0.24;
+        let top = off ? 0.10 : 0.30;   // top speed, pitch widths per second
 
         if (!off) {
-          if (sl.id === B.holder) { tX = B.x; tY = B.y; sp = 3.4; }                 // he has it
-          else if (sl.id === B.rx && B.fly) { tX = B.tx; tY = B.ty; sp = 3.0; }     // running onto it
+          if (sl.id === B.holder) { tX = B.x; tY = B.y; sp = 3.4; top = 0.42; }     // he has it
+          else if (sl.id === B.rx && B.fly) { tX = B.tx; tY = B.ty; sp = 3.0; top = 0.60; }  // sprinting onto it
           else if (sl.id === (sl.home ? pressH : pressA) && (sl.home ? pressA : pressH) === B.holder) {
-            tX = mix(tX, B.x, 0.7); tY = mix(tY, B.y, 0.7); sp = 3.0;               // pressing the ball
+            tX = mix(tX, B.x, 0.7); tY = mix(tY, B.y, 0.7); sp = 3.0; top = 0.52;   // pressing the ball
           }
         }
 
         let p = pos.get(sl.id);
         if (!p) { p = { x: tX, y: tY }; pos.set(sl.id, p); }
+        // Ease toward the target, but never faster than a man can run. Pure
+        // easing alone sprinted when far and crawled when close, which is what
+        // made the old pitch feel like sliding counters instead of players.
         const kk = 1 - Math.exp(-dt * sp);
-        p.x = mix(p.x, tX, kk);
-        p.y = mix(p.y, tY, kk);
+        let nx = mix(p.x, tX, kk), ny = mix(p.y, tY, kk);
+        const sx = nx - p.x, sy = ny - p.y;
+        const sd = Math.hypot(sx, sy);
+        const capStep = top * dt;
+        if (sd > capStep && sd > 1e-6) { nx = p.x + (sx / sd) * capStep; ny = p.y + (sy / sd) * capStep; }
+        p.x = nx; p.y = ny;
         all.push({ sl, p });
+      }
 
+      // ---- nobody stands inside anybody. Without this players stack on the
+      // ball and the shape collapses into a clump, which is the single biggest
+      // tell that a 2D pitch is fake.
+      if (!off) separate(all, B.holder);
+
+      for (const { sl, p } of all) {
+        const node = nodes.current.get(sl.id);
         if (node) {
           const me = (sl.home ? s.home : s.away).id === myId;
           write(node, p.x, p.y, me ? 13 : 11);
