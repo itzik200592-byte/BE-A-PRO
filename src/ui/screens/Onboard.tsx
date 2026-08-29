@@ -24,12 +24,12 @@ export function OnboardManager({ gs, onDone }: { gs: G.GameState; onDone: (p: G.
 
   function submit() {
     if (!ready) return;
-    onDone({ name: name.trim(), nickname: nickname.trim(), age: 40, type: 'calm' });
+    onDone({ name: name.trim(), nickname: nickname.trim(), age: 40, type: 'mental' });
   }
 
   return (
     <div className="screen pad stack pad-b" style={{ gap: 16, minHeight: '100%' }}>
-      <Stepper current={1} />
+      <Stepper current={2} />
       <CoachGuide who="owner" text="ברוך הבא. אני מנהל הקבוצה, ואני זה שהביא אותך לכאן. תכף נצא לדרך, אבל קודם, איך קוראים לך?" />
       <div style={{ marginTop: 'clamp(4px,2vh,20px)' }}>
         <span className="eyebrow">BE A PRO</span>
@@ -111,7 +111,7 @@ export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: st
 
   return (
     <div className="screen pad stack pad-b" style={{ gap: 14 }}>
-      <Stepper current={2} />
+      <Stepper current={3} />
       <CoachGuide who="coach" text={`נעים מאוד ${gs.profile.name}, אני המאמן, ואיתך לאורך כל הדרך. עכשיו הלב של הכל, מאיזו עיר אתה? הקבוצה של העיר שלך תהיה הבית שלנו.`} />
       <div style={{ marginTop: 6 }}>
         <span className="eyebrow">{gs.profile.name}{gs.profile.nickname ? ` "${gs.profile.nickname}"` : ''}</span>

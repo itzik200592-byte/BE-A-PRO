@@ -48,7 +48,7 @@ export function SigningScreen({ gs, onDone }: {
 
   return (
     <div className="screen pad stack pad-b" style={{ gap: 14, minHeight: '100%' }}>
-      <Stepper current={3} />
+      <Stepper current={4} />
 
       {/* the announcement */}
       <div className="tile-hero" style={{ padding: 20, textAlign: 'center', animation: 'pop .45s var(--ease-out)' }}>

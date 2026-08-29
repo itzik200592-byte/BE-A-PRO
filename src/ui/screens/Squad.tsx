@@ -164,7 +164,7 @@ export function SquadScreen({ gs, firstTime, onSwap, onDone }: {
 
   return (
     <div className="screen pad stack pad-b" style={{ gap: 12 }}>
-      {firstTime && <Stepper current={4} />}
+      {firstTime && <Stepper current={5} />}
       {firstTime && <CoachGuide text="אלה השחקנים שקיבלת. תכיר אותם טוב, לחץ על כל אחד לכרטיס. איתם אנחנו מתחילים לטפס." />}
       <div className="row" style={{ marginTop: 8 }}>
         <Crest club={c} size={46} />

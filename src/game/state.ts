@@ -31,6 +31,12 @@ import {
   STADIUM_START, requiredCapacity, stadiumImageTier, gateIncome, expansionOptions,
 } from './career.ts';
 import type { RoundCosts, ExpansionOption } from './career.ts';
+import type { Coach } from './coach.ts';
+import {
+  newCoach, coachChemistry, coachAttBias, coachDefBias,
+  coachMoraleBias, coachYouthGrowth, qualifiedFor, requiredLicence,
+  licence, applyCourse, coachFitnessBonus, coachCardBias,
+} from './coach.ts';
 import type { PackPull, PackId } from './packs.ts';
 import {
   openPack, packById, GEMS_AT_START, GEMS_PER_AD, GEMS_ON_PROMOTION,
@@ -38,9 +44,9 @@ import {
 } from './packs.ts';
 
 export type Phase =
-  | 'onboard-manager' | 'onboard-club' | 'signing' | 'squad' | 'hub' | 'transfers'
+  | 'onboard-archetype' | 'onboard-manager' | 'onboard-club' | 'signing' | 'squad' | 'hub' | 'transfers'
   | 'dilemma' | 'tactic' | 'vs' | 'match' | 'result' | 'press' | 'season-end' | 'chronicle'
-  | 'captain' | 'assistant' | 'preseason' | 'preseason-market' | 'inbox' | 'chat' | 'table' | 'stadium'
+  | 'captain' | 'assistant' | 'coach' | 'preseason' | 'preseason-market' | 'inbox' | 'chat' | 'table' | 'stadium'
   | 'packs';
 
 export type MarketLine = 'gk' | 'def' | 'mid' | 'atk';
@@ -176,6 +182,8 @@ export interface GameState {
   adsWatched: number;
   /** the card just pulled from a pack, waiting to be signed or sold */
   pull: PackPull | null;
+  /** the manager's own career: his abilities, his badge, his seasons */
+  coach: Coach;
 }
 
 /**
@@ -206,10 +214,10 @@ export function ageProfile(age: number) {
 
 export function newGame(seed = 12345): GameState {
   return {
-    phase: 'onboard-manager',
+    phase: 'onboard-archetype',
     seasonSeed: seed,
     clubId: '',
-    profile: { name: '', nickname: '', age: 38, type: 'calm' },
+    profile: { name: '', nickname: '', age: 38, type: 'mental' },
     meters: { money: START_MONEY, morale: 65, prestige: 30 },
     tactic: { approach: 'balanced', press: 'mid' },
     week: 1,
@@ -246,6 +254,7 @@ export function newGame(seed = 12345): GameState {
     gems: GEMS_AT_START,
     adsWatched: 0,
     pull: null,
+    coach: newCoach('mental'),
   };
 }
 
@@ -274,7 +283,18 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 /* ------------------------------------------------------------- onboarding */
 
 export function setProfile(gs: GameState, profile: ManagerProfile): GameState {
-  return { ...gs, profile, phase: 'onboard-club' };
+  // the CV picked at the start IS the coach, so his abilities come from it
+  return { ...gs, profile, coach: newCoach(profile.type), phase: 'onboard-club' };
+}
+
+/** Step one of the opening: which coach you are. */
+export function setArchetype(gs: GameState, id: ManagerId): GameState {
+  return {
+    ...gs,
+    profile: { ...gs.profile, type: id },
+    coach: newCoach(id),
+    phase: 'onboard-manager',
+  };
 }
 
 /** Club choice sets the money, the prestige and the squad you inherit. */
@@ -348,6 +368,39 @@ export function enterPreseason(gs: GameState): GameState {
   return { ...gs, phase: 'preseason-market', preWeek: 1, preResolved: [], contracts, pendingOutcome: null };
 }
 
+/* ------------------------------------------------------- coaching badges */
+
+/** Is the manager unqualified for the division he is about to open? */
+export function courseRequired(gs: GameState): boolean {
+  return !qualifiedFor(gs.coach.licence, club(gs).tier);
+}
+
+/** The badge on offer this summer, or null when there is nothing to take. */
+export function courseOnOffer(gs: GameState) {
+  const nextId = requiredLicence(club(gs).tier);
+  if (qualifiedFor(gs.coach.licence, club(gs).tier)) return null;
+  return licence(nextId);
+}
+
+export function courseBlockedReason(gs: GameState): string | null {
+  const l = courseOnOffer(gs);
+  if (!l) return null;
+  if (gs.meters.money < l.cost) return 'אין מספיק תקציב לקורס';
+  return null;
+}
+
+/** Take the course. Costs money, upgrades the badge and the man. */
+export function takeCourse(gs: GameState): GameState {
+  const l = courseOnOffer(gs);
+  if (!l || courseBlockedReason(gs)) return gs;
+  return {
+    ...gs,
+    meters: { ...gs.meters, money: gs.meters.money - l.cost },
+    coach: applyCourse(gs.coach, l.id),
+    pendingOutcome: `סיימת את ${l.course}. מהיום אתה ${l.name}.`,
+  };
+}
+
 /** Return to the summer board after a trip to the open market. No state moves. */
 export function backToPreseason(gs: GameState): GameState {
   return { ...gs, phase: 'preseason-market', pendingOutcome: null };
@@ -361,6 +414,11 @@ export function backToPreseason(gs: GameState): GameState {
  */
 export function preseasonBlockedReason(gs: GameState): string | null {
   if (gs.preWeek < PRE_ROUNDS) return null;
+  // the badge comes first: a division you are not qualified for will not let
+  // you take the touchline at all, whatever else you sorted out this summer
+  if (courseRequired(gs)) {
+    return `בלי ${licence(requiredLicence(club(gs).tier)).name} אי אפשר לפתוח עונה ב${LEAGUE_NAMES[club(gs).tier]}`;
+  }
   const open = preseasonEvents(gs).filter(e => e.kind === 'renew');
   if (!open.length) return null;
   return open.length === 1
@@ -1216,14 +1274,19 @@ function teamInput(gs: GameState, clubId: string, isHome: boolean, tactic?: Tact
   const c = gs.league.clubs.find(x => x.id === clubId)!;
   const players: Player[] = sq.starters.map(p => ({ ...p }));
   const t = tactic ?? { approach: 'balanced' as Approach, press: 'mid' as Press };
-  if (clubId === gs.clubId) {
+  const mine = clubId === gs.clubId;
+  if (mine) {
     const bias = (gs.meters.morale - 65) / 100;
     players.forEach(p => { p.morale = clamp(p.morale + bias * 20, 0, 100); });
   }
   return {
     id: clubId, name: c.name, players,
     tactic: { formation: '4-3-3', approach: t.approach, press: t.press },
-    chemistry: 0.7, isHome,
+    // your side plays to the manager on the touchline, the AI keeps the
+    // neutral baseline the engine was calibrated against
+    chemistry: mine ? coachChemistry(gs.coach) : 0.7,
+    coach: mine ? { att: coachAttBias(gs.coach), def: coachDefBias(gs.coach) } : undefined,
+    isHome,
   };
 }
 
@@ -1253,6 +1316,12 @@ export function liveMatchInput(gs: GameState) {
     oppStarters: opp.starters, oppBench: opp.bench,
     moraleBias: (gs.meters.morale - 65) / 100,
     captainId: currentCaptainId(gs),
+    coach: {
+      chemistry: coachChemistry(gs.coach),
+      att: coachAttBias(gs.coach),
+      def: coachDefBias(gs.coach),
+      cards: coachCardBias(gs.coach),
+    },
   };
 }
 
@@ -1309,9 +1378,9 @@ export function commitRound(gs: GameState, playerResult: MatchResult): GameState
   const myGoals = iAmHome ? playerResult.score[0] : playerResult.score[1];
   const oppGoals = iAmHome ? playerResult.score[1] : playerResult.score[0];
   const won = myGoals > oppGoals, draw = myGoals === oppGoals;
-  const m = getManager(gs.profile.type);
   const prize = matchPrize(club(gs).tier, won ? 'W' : draw ? 'D' : 'L');
-  const moraleDelta = (won ? +6 : draw ? 0 : -5) + m.moraleBias;
+  // a motivator lifts the room after any result, a cold coach lets it sag
+  const moraleDelta = (won ? +6 : draw ? 0 : -5) + coachMoraleBias(gs.coach);
 
   const derby = isDerby(fx.homeId, fx.awayId);
   // the week also costs money to run, so a result is a real financial event
@@ -1449,7 +1518,7 @@ export function closeChat(gs: GameState): GameState {
 /** TEMP dev preview: a career with a few rounds played, for the /?league route. */
 export function demoSeason(rounds = 8): GameState {
   let gs = newGame(4242);
-  gs = setProfile(gs, { name: 'איציק', nickname: 'איציק', age: 38, type: 'calm' });
+  gs = setProfile(gs, { name: 'איציק', nickname: 'איציק', age: 38, type: 'mental' });
   gs = pickClub(gs, gs.league.clubs[0].id);
   gs = afterSigning(gs, {});
   gs = enterSeason(gs);
@@ -1553,6 +1622,8 @@ export function startNextSeason(gs: GameState): GameState {
     position, teams,
     minSquad: MIN_SQUAD,
     stadiumOk: gs.stadium.capacity >= requiredCapacity(myClub.tier + 1),
+    youthGrowth: coachYouthGrowth(gs.coach),
+    fitnessBonus: coachFitnessBonus(gs.coach),
   });
 
   // the whole division carries forward, aged, rather than being regenerated
@@ -1638,6 +1709,7 @@ export function startNextSeason(gs: GameState): GameState {
     gems: gs.gems + (r.result === 'champion' || r.result === 'promoted' ? GEMS_ON_PROMOTION : 0),
     adsWatched: 0,
     pull: null,
+    coach: { ...gs.coach, seasons: gs.coach.seasons + 1 },
   };
 }
 
@@ -1668,6 +1740,7 @@ export function atTopTier(gs: GameState): boolean {
   return club(gs).tier >= TOP_TIER;
 }
 
+export function openCoach(gs: GameState): GameState { return { ...gs, phase: 'coach' }; }
 export function openCaptain(gs: GameState): GameState { return { ...gs, phase: 'captain' }; }
 export function openAssistant(gs: GameState): GameState { return { ...gs, phase: 'assistant' }; }
 export function unreadChronicle(gs: GameState): number {

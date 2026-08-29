@@ -59,6 +59,12 @@ export interface TeamInput {
   players: Player[];   // exactly 11, first must be the GK
   tactic: Tactic;
   chemistry: number;   // 0..1, see card-system.md
+  /**
+   * What the manager on the touchline is worth, as multipliers on the attacking
+   * and defensive ratings. Optional and neutral by default, so a team without a
+   * coach behind it plays exactly as it did before this existed.
+   */
+  coach?: { att: number; def: number };
   isHome: boolean;
 }
 
@@ -209,10 +215,12 @@ export function teamRatings(team: TeamInput): TeamRatings {
   const pr = PRESS_MOD[team.tactic.press];
 
   const base = chem * fitness * morale * home;
+  const cAtt = team.coach?.att ?? 1;
+  const cDef = team.coach?.def ?? 1;
   return {
-    att: att * base * ap.att,
+    att: att * base * ap.att * cAtt,
     mid: mid * base * pr.mid,
-    def: def * base * ap.def * pr.def,
+    def: def * base * ap.def * pr.def * cDef,
     gk,
   };
 }

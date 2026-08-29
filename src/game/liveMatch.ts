@@ -45,6 +45,8 @@ export interface Side {
   bench: Player[];
   tactic: SimpleTactic;
   isPlayer: boolean;
+  /** what the manager is worth to this side, only set for the player's team */
+  coach?: { chemistry: number; att: number; def: number; cards: number };
 }
 
 export type MomentKind =
@@ -118,7 +120,11 @@ function sideRatings(s: Side) {
   const ti: TeamInput = {
     id: s.id, name: s.name, players: s.onPitch,
     tactic: { formation: '4-3-3', approach: s.tactic.approach, press: s.tactic.press },
-    chemistry: 0.7, isHome: s.isHome,
+    // the manager on the touchline counts here too. Without this the coach
+    // would only shape the AI's matches and never the one you actually watch
+    chemistry: s.coach?.chemistry ?? 0.7,
+    coach: s.coach ? { att: s.coach.att, def: s.coach.def } : undefined,
+    isHome: s.isHome,
   };
   const r = teamRatings(ti);
   const m = MODE_MOD[s.tactic.mode ?? 'normal'];   // the live only shout layer
@@ -169,6 +175,8 @@ export function createLive(input: {
   oppStarters: Player[]; oppBench: Player[];
   moraleBias: number;
   captainId?: string | null;
+  /** what the manager brings, applied to the player's side only */
+  coach?: { chemistry: number; att: number; def: number; cards: number };
 }): LiveState {
   const clone = (p: Player): Player => ({ ...p, attrs: { ...p.attrs } });
   const pStarters = input.playerStarters.map(clone);
@@ -193,6 +201,7 @@ export function createLive(input: {
     name: input.iAmHome ? input.homeName : input.awayName,
     isHome: input.iAmHome, isPlayer: true,
     onPitch: pStarters, bench: pBench, tactic: input.playerTactic,
+    coach: input.coach,
   };
   const oppSideObj: Side = {
     id: input.iAmHome ? input.awayId : input.homeId,
@@ -406,7 +415,8 @@ function maybeDiscipline(st: LiveState) {
       let r = rand(st) * totalW;
       let p = outs[outs.length - 1];
       for (let i = 0; i < outs.length; i++) { r -= weights[i]; if (r <= 0) { p = outs[i]; break; } }
-      const cardBias = s.tactic.press === 'high' ? 1.3 : 1;
+      // a hard coach keeps his players on the right side of the line
+      const cardBias = (s.tactic.press === 'high' ? 1.3 : 1) * (s.coach?.cards ?? 1);
       if (rand(st) < 0.05 * cardBias) {
         st.events.push({ minute: st.minute, type: 'red', teamId: s.id, playerName: p.name, text: `אדום! ${p.name} מורחק` });
       } else {

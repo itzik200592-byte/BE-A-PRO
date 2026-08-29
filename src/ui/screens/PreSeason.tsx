@@ -3,6 +3,7 @@ import * as G from '../../game/state.ts';
 import type { PreEvent } from '../../game/state.ts';
 import type { Player } from '../../engine/matchEngine.ts';
 import type { Squad } from '../../data/squadGen.ts';
+import { LEAGUE_NAMES } from '../../data/clubs.ts';
 import { PRE_ROUNDS } from '../../game/preseason.ts';
 import { overall } from '../../engine/matchEngine.ts';
 import { assignTraits } from '../../data/personalities.ts';
@@ -20,7 +21,7 @@ import { ovrColor, LINE_OF, LINE_LABEL, LINE_COLOR } from './Squad.tsx';
  * see the holes you are here to fill.
  */
 export function PreSeasonMarket({
-  gs, firstCareer, onOpenMarket, onResolveDeparture, onRenew, onRelease, onDismissOutcome, onAdvance,
+  gs, firstCareer, onOpenMarket, onResolveDeparture, onRenew, onRelease, onDismissOutcome, onTakeCourse, onAdvance,
 }: {
   gs: G.GameState;
   firstCareer: boolean;
@@ -29,6 +30,7 @@ export function PreSeasonMarket({
   onRenew: (playerId: string) => void;
   onRelease: (playerId: string) => void;
   onDismissOutcome: () => void;
+  onTakeCourse: () => void;
   onAdvance: () => void;
 }) {
   const c = G.club(gs);
@@ -71,7 +73,7 @@ export function PreSeasonMarket({
     <>
       <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 13, minHeight: '100%' }}>
-        {firstCareer && <Stepper current={5} />}
+        {firstCareer && <Stepper current={6} />}
 
         {/* The banner. No football is played here, this is the window, three rounds. */}
         <div className="tile-hero" style={{ padding: '16px 16px 15px', marginTop: firstCareer ? 2 : 6 }}>
@@ -108,6 +110,9 @@ export function PreSeasonMarket({
             <StatBox label="שחקנים" value={String(size)} />
           </div>
         </div>
+
+        {/* the badge you are missing for this division, the summer's first job */}
+        <CourseCard gs={gs} onTake={onTakeCourse} />
 
         {/* the squad, so the manager can see what he has and where the holes are */}
         <SquadPanel squad={sq} onOpen={setCard} onNeed={onOpenMarket} />
@@ -337,6 +342,45 @@ function RenewCard({ ev, onRenew, onRelease }: { ev: PreEvent; onRenew: () => vo
 }
 
 /** Three dots that fill as the summer runs down. */
+/**
+ * The coaching badge this division demands. It is a hard gate, the season will
+ * not open without it, so it sits at the top of the summer board in red until
+ * it is done.
+ */
+function CourseCard({ gs, onTake }: { gs: G.GameState; onTake: () => void }) {
+  const course = G.courseOnOffer(gs);
+  if (!course) return null;
+  const blocked = G.courseBlockedReason(gs);
+  const tierName = LEAGUE_NAMES[G.club(gs).tier];
+
+  return (
+    <div className="tile" style={{
+      padding: '14px 15px',
+      borderColor: 'color-mix(in srgb, var(--loss) 45%, transparent)',
+      background: 'linear-gradient(180deg, color-mix(in srgb, var(--loss) 9%, var(--surface-2)), var(--surface))',
+    }}>
+      <div className="row" style={{ gap: 10, marginBottom: 8 }}>
+        <Icon name="clipboard" size={19} color="var(--loss)" />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 900, fontSize: 16.5 }}>{course.course}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--loss)', marginTop: 2 }}>
+            חובה כדי לפתוח עונה ב{tierName}
+          </div>
+        </div>
+      </div>
+      <p className="sub" style={{ fontSize: 13.5, lineHeight: 1.5 }}>{course.blurb}</p>
+      <div className="row" style={{ gap: 8, marginTop: 10 }}>
+        <StatBox label="עלות" value={formatMoney(course.cost)} color="var(--gold)" />
+        <StatBox label="אימון" value={`+${course.gain.training}`} />
+        <StatBox label="מנטלי" value={`+${course.gain.mental}`} />
+      </div>
+      <button className="btn" style={{ marginTop: 11 }} disabled={!!blocked} onClick={onTake}>
+        {blocked ?? `צא ל${course.course} · הפוך ל${course.name}`}
+      </button>
+    </div>
+  );
+}
+
 function RoundDots({ round }: { round: number }) {
   return (
     <span className="row" style={{ gap: 5 }}>

@@ -7,6 +7,7 @@ import { IntroCinematic } from './screens/Intro.tsx';
 import { Gate, hasEntry } from './screens/Gate.tsx';
 import { Tutorial } from './components/Tutorial.tsx';
 import { OnboardManager, OnboardClub } from './screens/Onboard.tsx';
+import { ArchetypeScreen } from './screens/Archetype.tsx';
 import { SquadScreen } from './screens/Squad.tsx';
 import { SigningScreen } from './screens/Signing.tsx';
 import { PreSeasonMarket } from './screens/PreSeason.tsx';
@@ -27,6 +28,7 @@ import { CaptainScreen } from './screens/Captain.tsx';
 import { AssistantScreen } from './screens/Assistant.tsx';
 import { StadiumScreen } from './screens/Stadium.tsx';
 import { PacksScreen } from './screens/Packs.tsx';
+import { CoachScreen } from './screens/Coach.tsx';
 
 export function App() {
   const [entered, setEntered] = useState(() => hasEntry());  // soft code gate for closed testing
@@ -90,6 +92,9 @@ export function App() {
 
   return (
     <div className="frame">
+      {gs.phase === 'onboard-archetype' && (
+        <ArchetypeScreen onPick={id => setGs(G.setArchetype(gs, id))} />
+      )}
       {gs.phase === 'onboard-manager' && (
         <OnboardManager gs={gs} onDone={p => setGs(G.setProfile(gs, p))} />
       )}
@@ -114,6 +119,7 @@ export function App() {
           onRenew={id => setGs(g => G.renewContract(g, id))}
           onRelease={id => setGs(g => G.releasePlayer(g, id))}
           onDismissOutcome={() => setGs(G.clearPreseasonOutcome(gs))}
+          onTakeCourse={() => setGs(g => G.takeCourse(g))}
           onAdvance={() => {
             const next = G.advancePreseason(gs);
             if (next.phase === 'hub' && gs.season === 1) setTutorial(true);
@@ -140,12 +146,16 @@ export function App() {
           onInbox={() => setGs(G.openInbox(gs))}
           onStadium={() => setGs(G.openStadium(gs))}
           onPacks={() => setGs(G.openPacks(gs))}
+          onCoach={() => setGs(G.openCoach(gs))}
           onTable={() => setGs(G.openTable(gs))} />
       )}
       {gs.phase === 'stadium' && (
         <StadiumScreen gs={gs}
           onBuild={key => setGs(g => G.startStadiumProject(g, key))}
           onBack={() => setGs(G.backToHub(gs))} />
+      )}
+      {gs.phase === 'coach' && (
+        <CoachScreen gs={gs} onBack={() => setGs(G.backToHub(gs))} />
       )}
       {gs.phase === 'packs' && (
         <PacksScreen gs={gs}

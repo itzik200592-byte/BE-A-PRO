@@ -1,9 +1,45 @@
 /**
- * Manager personality. A cheap, high emotion system: the player picks who they
- * are, and it changes real modifiers plus the tone of the chat dilemmas.
+ * The manager you are. Picked at the very start, it sets your coaching CV: a
+ * style, not a power level. Every archetype starts on the same total of ability
+ * points, spread differently, so the choice is about how you win rather than
+ * how much you win.
+ *
+ * Attributes run 1..20, the coaching scale, deliberately unlike the 40..99 the
+ * players use so the two are never confused.
  */
 
-export type ManagerId = 'calm' | 'fighter' | 'accountant' | 'dreamer';
+export type ManagerId = 'youth' | 'recruiter' | 'mental' | 'charismatic' | 'tactician';
+
+/** What a coach is actually good at. Two groups, see CoachAttrs below. */
+export interface CoachAttrs {
+  /* training */
+  attack: number;
+  defence: number;
+  tactics: number;
+  fitness: number;
+  /* mental */
+  determination: number;   // the drive to prove himself and his players
+  motivation: number;      // the ability to inspire and lift a dressing room
+  discipline: number;      // how hard he is. Fewer complaints, less warmth
+}
+
+export const TRAINING_KEYS = ['attack', 'defence', 'tactics', 'fitness'] as const;
+export const MENTAL_KEYS = ['determination', 'motivation', 'discipline'] as const;
+
+export const ATTR_LABEL: Record<keyof CoachAttrs, string> = {
+  attack: 'התקפה', defence: 'הגנה', tactics: 'טקטיקה', fitness: 'כושר גופני',
+  determination: 'נחישות', motivation: 'מוטיבציה', discipline: 'רמת משמעת',
+};
+
+export const ATTR_HINT: Record<keyof CoachAttrs, string> = {
+  attack: 'כמה הקבוצה מסוכנת קדימה',
+  defence: 'כמה קשה להבקיע לכם',
+  tactics: 'כמה ההוראות שלך באמת עובדות על המגרש',
+  fitness: 'כמה מהר השחקנים מתאוששים בין מחזורים',
+  determination: 'הרצון והדחף שלך להצליח ולהוכיח, ולהוציא את זה מהשחקנים',
+  motivation: 'היכולת להלהיב ולעורר השראה בשחקנים',
+  discipline: 'כמה אתה קשוח. מונע תלונות, אבל קשה יותר להתחבר אליך אישית',
+};
 
 export interface ManagerType {
   id: ManagerId;
@@ -11,37 +47,48 @@ export interface ManagerType {
   tagline: string;
   perk: string;
   cost: string;
-  /** multipliers applied in the game layer */
-  moraleBias: number;       // baseline morale drift per week
-  derbyMorale: number;      // extra morale in big games
-  youthGrowth: number;      // talent development multiplier
-  budgetBias: number;       // starting budget multiplier
-  cardBias: number;         // discipline, higher = more cards
+  /** starting ability, before any course */
+  base: CoachAttrs;
+  /** starting budget multiplier, the one thing the CV changes off the pitch */
+  budgetBias: number;
 }
+
+/** every archetype starts on the same total, so this is style and not power */
+export const START_TOTAL = 56;
 
 export const MANAGERS: ManagerType[] = [
   {
-    id: 'calm', name: 'הרוגע', tagline: 'אנחנו לא נלחצים, ממשיכים לעבוד',
-    perk: 'מורל יציב לאורך כל העונה', cost: 'השחקנים מתפתחים לאט יותר',
-    moraleBias: +2, derbyMorale: 0, youthGrowth: 0.85, budgetBias: 1.0, cardBias: 0.9,
+    id: 'youth', name: 'מפתח הנוער', tagline: 'תנו לי ילד, אני אחזיר לכם שחקן',
+    perk: 'צעירים מתפתחים אצלך הרבה יותר מהר', cost: 'פחות שליטה טקטית ביום המשחק',
+    base: { attack: 6, defence: 6, tactics: 9, fitness: 11, determination: 9, motivation: 9, discipline: 6 },
+    budgetBias: 0.9,
   },
   {
-    id: 'fighter', name: 'הלוחם', tagline: 'היום נכנסים בהם מהדקה הראשונה',
-    perk: 'מורל גבוה בדרבי ובמשחקים גדולים', cost: 'חוטף יותר כרטיסים',
-    moraleBias: 0, derbyMorale: +8, youthGrowth: 1.0, budgetBias: 1.0, cardBias: 1.25,
+    id: 'recruiter', name: 'הצייד', tagline: 'אני יודע בדיוק את מי להביא',
+    perk: 'תקציב פתיחה גדול יותר, ועין לשחקנים מוכחים', cost: 'לא באמת מפתח את מי שכבר יש לך',
+    base: { attack: 9, defence: 9, tactics: 9, fitness: 6, determination: 11, motivation: 6, discipline: 6 },
+    budgetBias: 1.35,
   },
   {
-    id: 'accountant', name: 'הכספן', tagline: 'כל שקל נספר, אחי',
-    perk: 'מתחיל עם תקציב גדול יותר', cost: 'הקהל קצת פחות מתלהב',
-    moraleBias: -1, derbyMorale: 0, youthGrowth: 1.0, budgetBias: 1.4, cardBias: 1.0,
+    id: 'mental', name: 'המנטליסט', tagline: 'קודם הראש, אחר כך הרגליים',
+    perk: 'חדר הלבשה חזק, מורל שלא נשבר', cost: 'לא מביא יתרון טקטי או פיזי',
+    base: { attack: 6, defence: 6, tactics: 7, fitness: 7, determination: 12, motivation: 12, discipline: 6 },
+    budgetBias: 1.0,
   },
   {
-    id: 'dreamer', name: 'החולם', tagline: 'אני בונה פה משהו לשנים',
-    perk: 'כישרונות צעירים מתפתחים מהר', cost: 'מתחיל עם תקציב קטן',
-    moraleBias: 0, derbyMorale: 0, youthGrowth: 1.35, budgetBias: 0.75, cardBias: 1.0,
+    id: 'charismatic', name: 'הכריזמטי', tagline: 'אני לא מבין בלוח, אבל הם ירוצו בשבילי',
+    perk: 'מלהיב שחקנים כמו אף אחד', cost: 'ידע טקטי כמעט אפסי',
+    base: { attack: 8, defence: 7, tactics: 3, fitness: 8, determination: 10, motivation: 14, discipline: 6 },
+    budgetBias: 1.0,
+  },
+  {
+    id: 'tactician', name: 'הטקטיקן', tagline: 'הלוח מדבר, אני לא צריך',
+    perk: 'הוראות שעובדות, קבוצה מסודרת בשני הצדדים', cost: 'קר, לא מצליח להלהיב',
+    base: { attack: 10, defence: 10, tactics: 14, fitness: 7, determination: 7, motivation: 3, discipline: 5 },
+    budgetBias: 1.0,
   },
 ];
 
 export function getManager(id: ManagerId): ManagerType {
-  return MANAGERS.find(m => m.id === id) ?? MANAGERS[0];
+  return MANAGERS.find(m => m.id === id) ?? MANAGERS[2];
 }

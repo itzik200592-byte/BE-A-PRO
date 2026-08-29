@@ -8,11 +8,12 @@ import { MiniTable } from './Table.tsx';
 import { FanNote } from '../components/FanNote.tsx';
 import { Gem, GemCount } from '../components/Gem.tsx';
 import { PACKS } from '../../game/packs.ts';
+import { licence } from '../../game/coach.ts';
 
-export function Hub({ gs, onStart, onSquad, onTransfers, onChronicle, onCaptain, onAssistant, onInbox, onStadium, onPacks, onTable }: {
+export function Hub({ gs, onStart, onSquad, onTransfers, onChronicle, onCaptain, onAssistant, onInbox, onStadium, onPacks, onCoach, onTable }: {
   gs: G.GameState; onStart: () => void; onSquad: () => void; onTransfers: () => void;
   onChronicle: () => void; onCaptain: () => void; onAssistant: () => void; onInbox: () => void;
-  onStadium: () => void; onPacks: () => void; onTable: () => void;
+  onStadium: () => void; onPacks: () => void; onCoach: () => void; onTable: () => void;
 }) {
   const c = G.club(gs);
   const fx = G.playerFixture(gs);
@@ -78,6 +79,10 @@ export function Hub({ gs, onStart, onSquad, onTransfers, onChronicle, onCaptain,
 
         {/* staff */}
         <div className="row" style={{ gap: 9 }}>
+          <StaffCard icon="clipboard" title="המאמן שלי"
+            note={`${licence(gs.coach.licence).name}`}
+            accent={G.courseRequired(gs) ? 'var(--loss)' : undefined}
+            onClick={onCoach} />
           <StaffCard icon="star" title="קפטן" note={cap ? cap.name : 'לא נבחר'} onClick={onCaptain} />
           <StaffCard
             icon="mic" title="עוזר מאמן"

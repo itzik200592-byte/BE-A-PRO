@@ -1,9 +1,9 @@
 /**
- * Progress through the opening of a career. Five stops before the first round,
+ * Progress through the opening of a career. Six stops before the first round,
  * so signing on feels like a journey rather than a form and a button.
  */
 
-export const INTRO_STEPS = ['מי אתה', 'המועדון', 'החתימה', 'הסגל', 'השוק'] as const;
+export const INTRO_STEPS = ['הרזומה', 'מי אתה', 'המועדון', 'החתימה', 'הסגל', 'השוק'] as const;
 
 export function Stepper({ current }: { current: number }) {
   return (

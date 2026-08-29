@@ -160,7 +160,13 @@ export interface AgeOutcome {
  * Move the whole squad one year on. Returns the new squad plus a report, which
  * is what the end of season screen actually shows the manager.
  */
-export function ageSquad(squad: Squad, rng: Rng, tier: number, minSquad: number): AgeOutcome {
+export function ageSquad(
+  squad: Squad, rng: Rng, tier: number, minSquad: number,
+  /** how much of their potential the young reach under this manager, 1 = neutral */
+  youthGrowth = 1,
+  /** extra condition a fitness coach brings out of pre season, 0 = neutral */
+  fitnessBonus = 0,
+): AgeOutcome {
   const retired: { name: string; age: number }[] = [];
   const risers: AgeChange[] = [];
   const fallers: AgeChange[] = [];
@@ -173,9 +179,11 @@ export function ageSquad(squad: Squad, rng: Rng, tier: number, minSquad: number)
       if (retires(p, rng)) { retired.push({ name: p.name, age: p.age }); continue; }
       const before = overall(p);
       p.age += 1;
-      applyDelta(p, growth(effectiveAge(p), devFactor(p.id), before, potentialOf(p)));
+      // only improvement is coached, decline happens to everyone alike
+      const raw = growth(effectiveAge(p), devFactor(p.id), before, potentialOf(p));
+      applyDelta(p, raw > 0 ? raw * youthGrowth : raw);
       // a fresh pre season resets the body, not the years
-      p.fitness = 88 + Math.floor(rng() * 12);
+      p.fitness = Math.max(60, Math.min(100, 88 + Math.floor(rng() * 12) + fitnessBonus));
       const after = overall(p);
       if (after > before) risers.push({ name: p.name, from: before, to: after, age: p.age });
       else if (after < before) fallers.push({ name: p.name, from: before, to: after, age: p.age });
@@ -460,6 +468,10 @@ export function buildNextSeason(input: {
   minSquad: number;
   /** does the ground meet the division above's minimum, gating promotion */
   stadiumOk: boolean;
+  /** manager effect on how much the young improve, 1 = neutral */
+  youthGrowth?: number;
+  /** extra fitness his conditioning work is worth out of pre season, 0 = neutral */
+  fitnessBonus?: number;
 }): NextSeason {
   const { tier, position, teams, myClubId } = input;
   const wantsUp = position <= 2 && tier < TOP_TIER;
@@ -476,7 +488,8 @@ export function buildNextSeason(input: {
   const seed = input.seasonSeed + input.season * 7919 + 13;
   const rng = createRng(seed);
 
-  const aged = ageSquad(input.squads[myClubId], rng, newTier, input.minSquad);
+  const aged = ageSquad(input.squads[myClubId], rng, newTier, input.minSquad,
+    input.youthGrowth ?? 1, input.fitnessBonus ?? 0);
 
   // the division you walk into, with your club taking one of the places
   const myClub: Club = { ...input.myClub, tier: newTier };

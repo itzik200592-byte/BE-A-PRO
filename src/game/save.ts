@@ -12,6 +12,7 @@ import { STADIUM_START } from './career.ts';
 import { GEMS_AT_START } from './packs.ts';
 import { primePlayerIds } from '../data/squadGen.ts';
 import { setDerbies, derbiesFromClubs } from '../data/clubs.ts';
+import { newCoach } from './coach.ts';
 
 const KEY = 'beapro.career.v1';
 const VERSION = 1;
@@ -32,7 +33,7 @@ export interface SaveSummary {
 
 export function saveCareer(state: GameState): void {
   // do not persist half finished onboarding, there is nothing to return to
-  if (!state.clubId || state.phase === 'onboard-manager' || state.phase === 'onboard-club') return;
+  if (!state.clubId || state.phase === 'onboard-archetype' || state.phase === 'onboard-manager' || state.phase === 'onboard-club') return;
   try {
     const env: Envelope = { version: VERSION, savedAt: Date.now(), state };
     localStorage.setItem(KEY, JSON.stringify(env));
@@ -110,6 +111,10 @@ export function loadCareer(): GameState | null {
     gems: s.gems ?? GEMS_AT_START,
     adsWatched: s.adsWatched ?? 0,
     pull: s.pull ?? null,
+    // a career from before the coach had a CV starts as an amateur on the
+    // archetype it was saved with, which no longer exists, so newCoach falls
+    // back to a sane default
+    coach: s.coach ?? newCoach(s.profile?.type ?? 'mental'),
   };
   if (patched.phase === 'match') return { ...patched, phase: 'hub' };
   return patched;
