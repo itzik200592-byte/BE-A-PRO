@@ -448,6 +448,31 @@ input{font-family:inherit;}
 /* wrong-code nudge on the entry gate */
 @keyframes shake{10%,90%{transform:translateX(-1px);}20%,80%{transform:translateX(2px);}30%,50%,70%{transform:translateX(-4px);}40%,60%{transform:translateX(4px);}}
 
+/* the win celebration, the coach fist-pumping over a gold glow */
+.win-hero{
+  position:relative; display:flex; flex-direction:column; align-items:center; gap:4px;
+  padding:16px 14px 14px; overflow:hidden; isolation:isolate;
+  border-radius:var(--plate); border:1px solid color-mix(in srgb,var(--gold) 40%,transparent);
+  background:linear-gradient(180deg, color-mix(in srgb,var(--gold) 10%,var(--surface-2)), var(--surface));
+  animation:pop .45s var(--ease-out) both;
+}
+.win-hero-glow{
+  position:absolute; inset:0; z-index:-1; pointer-events:none;
+  background:radial-gradient(70% 60% at 50% 30%, rgba(233,185,73,.30), transparent 70%);
+  animation:pulseLive 2.6s ease-in-out infinite;
+}
+.coach-celebrate{
+  width:132px; height:132px; border-radius:20px; object-fit:cover; object-position:50% 42%;
+  border:2.5px solid var(--gold); background:var(--bg);
+  box-shadow:0 8px 24px rgba(0,0,0,.5), 0 0 0 5px color-mix(in srgb,var(--gold) 12%,transparent);
+}
+.win-hero-word{
+  font-family:var(--font-display); font-weight:900; font-size:clamp(28px,9vw,40px);
+  color:var(--gold-hi); letter-spacing:.02em; margin-top:8px;
+  text-shadow:0 3px 18px rgba(233,185,73,.45);
+}
+.win-hero-score{font-weight:900; font-size:22px; color:var(--ink); letter-spacing:.04em}
+
 /* the cinematic VS screen before kickoff */
 .vs-screen{
   position:relative; min-height:100%; display:flex; flex-direction:column;

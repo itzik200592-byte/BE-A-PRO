@@ -3,6 +3,7 @@ import * as G from '../../game/state.ts';
 import { Meters, Badge, ScorePair } from '../components/bits.tsx';
 import { MiniTable } from './Table.tsx';
 import { FanNote } from '../components/FanNote.tsx';
+import { CoachCelebrate } from '../components/CoachGuide.tsx';
 import { StadiumRevealOverlay } from './Stadium.tsx';
 
 export function ResultScreen({ gs, onContinue }: { gs: G.GameState; onContinue: () => void }) {
@@ -29,6 +30,15 @@ export function ResultScreen({ gs, onContinue }: { gs: G.GameState; onContinue: 
     <>
       <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack" style={{ gap: 14 }}>
+        {won && (
+          <div className="win-hero">
+            <div className="win-hero-glow" aria-hidden="true" />
+            <CoachCelebrate />
+            <div className="win-hero-word">ניצחון</div>
+            <div className="win-hero-score num">{myGoals} : {oppGoals}</div>
+          </div>
+        )}
+
         <div className="tile" style={{ textAlign: 'center', borderColor: color }}>
           <div className="row" style={{ justifyContent: 'center', gap: 14 }}>
             <Badge club={homeClub} size={40} />

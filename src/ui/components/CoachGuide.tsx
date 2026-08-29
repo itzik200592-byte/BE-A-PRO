@@ -17,6 +17,21 @@ const FACE: Record<Who, { video: string; poster: string; name: string }> = {
   coach: { video: '/coach/guide.mp4', poster: '/coach/guide.webp', name: 'המאמן' },
 };
 
+/**
+ * The coach mid-celebration, the shouting fist-pump version, for a win. Same
+ * character as the guide, kept for exactly this moment.
+ */
+export function CoachCelebrate() {
+  return (
+    <video
+      className="coach-celebrate"
+      src={asset('/coach/celebrate.mp4')}
+      autoPlay muted loop playsInline preload="auto"
+      aria-label="המאמן חוגג"
+    />
+  );
+}
+
 export function CoachGuide({ text, who = 'coach' }: { text: string; who?: Who }) {
   const face = FACE[who];
   return (
