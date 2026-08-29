@@ -15,6 +15,8 @@ import { pickPressQuestion } from '../data/press.ts';
 import { pickTrigger, rollChat } from '../data/chats.ts';
 import type { RolledChat } from '../data/chats.ts';
 import { fanMessage } from '../data/fans.ts';
+import type { Post, FeedContext } from '../data/feed.ts';
+import { buildFeed } from '../data/feed.ts';
 import type { FanContext, FanMessage, FanTiming } from '../data/fans.ts';
 import type { Outlet, PressQuestion, PressContext } from '../data/press.ts';
 import type { FreeAgent } from './transfers.ts';
@@ -1044,6 +1046,65 @@ export function fanContext(gs: GameState, timing: FanTiming): FanContext {
 
 /** How many recent fan lines to remember, so the terrace stops repeating. */
 export const FAN_HISTORY = 16;
+
+/**
+ * The club's timeline, built from what has actually happened this save. Stable
+ * for a given week so it does not reshuffle while the manager is reading it.
+ */
+export function clubFeed(gs: GameState): Post[] {
+  const c = club(gs);
+  const sq = mySquad(gs);
+  const all = [...sq.starters, ...sq.bench];
+  const table = sortedTable(gs.league);
+  const pos = Math.max(1, table.findIndex(t => t.clubId === gs.clubId) + 1);
+  const shortOf = (id: string) => gs.league.clubs.find(x => x.id === id)?.short ?? '';
+
+  // our last match, from the round just played
+  const mine = gs.lastRound.find(m => m.homeId === gs.clubId || m.awayId === gs.clubId);
+  const last = mine
+    ? (() => {
+        const home = mine.homeId === gs.clubId;
+        return {
+          opponent: shortOf(home ? mine.awayId : mine.homeId),
+          mine: home ? mine.hg : mine.ag,
+          theirs: home ? mine.ag : mine.hg,
+          isDerby: isDerby(mine.homeId, mine.awayId),
+        };
+      })()
+    : null;
+
+  // who is scoring, and who has stopped
+  const goalsOf = (p: Player) => gs.seasonStats[p.id]?.goals ?? 0;
+  const scorer = [...all].sort((a, b) => goalsOf(b) - goalsOf(a))[0];
+  const topScorer = scorer && goalsOf(scorer) > 0
+    ? { name: scorer.name, goals: goalsOf(scorer) } : null;
+
+  let coldStriker: FeedContext['coldStriker'] = null;
+  for (const p of sq.starters.filter(x => ['ST', 'LW', 'RW', 'CAM'].includes(x.position))) {
+    const rec = gs.seasonStats[p.id];
+    const since = rec?.lastGoalWeek ? gs.week - rec.lastGoalWeek : (rec?.apps ?? 0);
+    if (since > (coldStriker?.weeks ?? 0)) coldStriker = { name: p.name, weeks: since };
+  }
+
+  const rivalId = c.rivalId;
+  const ctx: FeedContext = {
+    clubName: c.name, clubShort: c.short, city: c.city,
+    league: LEAGUE_NAMES[c.tier] ?? '',
+    pos, teams: gs.league.clubs.length,
+    form: gs.form,
+    last,
+    otherResults: gs.lastRound
+      .filter(m => m.homeId !== gs.clubId && m.awayId !== gs.clubId)
+      .map(m => ({ home: shortOf(m.homeId), away: shortOf(m.awayId), hg: m.hg, ag: m.ag })),
+    topScorer,
+    coldStriker,
+    youngster: [...all].filter(p => p.age <= 21).sort((a, b) => overall(b) - overall(a))[0] ?? null,
+    star: [...all].sort((a, b) => overall(b) - overall(a))[0] ?? null,
+    marketTarget: gs.market.length ? gs.market[0].player : null,
+    rival: rivalId ? shortOf(rivalId) : null,
+  };
+  return buildFeed(ctx, createRng(gs.seasonSeed * 31 + gs.week * 7 + 3));
+}
 
 /** The message shown this week, stable for a given week and timing. */
 export function fanNote(gs: GameState, timing: FanTiming): FanMessage {

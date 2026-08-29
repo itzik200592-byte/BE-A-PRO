@@ -6,6 +6,7 @@ import { Icon } from '../components/Icon.tsx';
 import type { IconName } from '../components/Icon.tsx';
 import { MiniTable } from './Table.tsx';
 import { FanNote } from '../components/FanNote.tsx';
+import { Feed } from '../components/Feed.tsx';
 import { Gem, GemCount } from '../components/Gem.tsx';
 import { PACKS } from '../../game/packs.ts';
 import { licence } from '../../game/coach.ts';
@@ -101,6 +102,8 @@ export function Hub({ gs, onStart, onSquad, onTransfers, onChronicle, onCaptain,
         <ChronicleTile total={totalChron} unread={unread} onClick={onChronicle} />
 
         <FanNote msg={G.fanNote(gs, 'pre')} />
+
+        <Feed posts={G.clubFeed(gs)} />
 
         <MiniTable gs={gs} highlight={gs.clubId} rows={5} />
 
