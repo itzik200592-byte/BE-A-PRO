@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import * as G from '../../game/state.ts';
 import { LEAGUE_NAMES } from '../../data/clubs.ts';
-import { MANAGERS } from '../../data/managers.ts';
 import type { ManagerId } from '../../data/managers.ts';
 import { searchCities, findCity, buildRegionLeague, clubFromCity } from '../../data/cities.ts';
 import type { City } from '../../data/cities.ts';
@@ -29,8 +28,8 @@ export function OnboardManager({ gs, onDone }: { gs: G.GameState; onDone: (p: G.
 
   return (
     <div className="screen pad stack pad-b" style={{ gap: 16, minHeight: '100%' }}>
-      <Stepper current={2} />
-      <CoachGuide who="owner" text="בדיוק את הסוג הזה חיפשנו. עכשיו נסדר את הניירת, איך קוראים לך?" />
+      <Stepper current={1} />
+      <CoachGuide who="owner" text="ברוך הבא, נעים מאוד. אני מנהל הקבוצה, ולפני שאנחנו מתקדמים בוא נסדר את הניירת. איך קוראים לך?" />
       <div style={{ marginTop: 'clamp(4px,2vh,20px)' }}>
         <span className="eyebrow">BE A PRO</span>
         <h1 className="h1" style={{ marginTop: 12 }}>איך קוראים לך?</h1>
@@ -89,7 +88,6 @@ export function OnboardManager({ gs, onDone }: { gs: G.GameState; onDone: (p: G.
  * built from the real towns around you, so it is your actual corner of the map.
  */
 export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: string) => void }) {
-  const m = MANAGERS.find(x => x.id === gs.profile.type)!;
   const [q, setQ] = useState('');
   const [chosen, setChosen] = useState<City | null>(null);
 
@@ -102,17 +100,19 @@ export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: st
     const me = region.clubs.find(c => c.id === region.myId)!;
     const derby = region.clubs.find(c => c.id === region.derbyId)!;
     const rest = region.clubs.filter(c => c.id !== me.id);
-    const budget = Math.round(G.START_MONEY * m.budgetBias * me.traits.budget);
+    // the club's own budget. What your CV is worth on top is settled on the
+    // next screen, once you have said what kind of coach you are
+    const budget = Math.round(G.START_MONEY * me.traits.budget);
     return { me, derby, rest, budget };
-  }, [chosen, m]);
+  }, [chosen]);
 
   function choose(c: City) { setChosen(c); setQ(c.name); }
   function reset() { setChosen(null); setQ(''); }
 
   return (
     <div className="screen pad stack pad-b" style={{ gap: 14 }}>
-      <Stepper current={3} />
-      <CoachGuide who="coach" text={`נעים מאוד ${gs.profile.name}, אני המאמן, ואיתך לאורך כל הדרך. עכשיו הלב של הכל, מאיזו עיר אתה? הקבוצה של העיר שלך תהיה הבית שלנו.`} />
+      <Stepper current={2} />
+      <CoachGuide who="owner" text={`נעים מאוד ${gs.profile.name}. עכשיו הלב של הכל, מאיזו עיר אתה? הקבוצה של העיר שלך היא הקבוצה שתיקח.`} />
       <div style={{ marginTop: 6 }}>
         <span className="eyebrow">{gs.profile.name}{gs.profile.nickname ? ` "${gs.profile.nickname}"` : ''}</span>
         <h1 className="h1" style={{ marginTop: 12 }}>מאיזו עיר אתה?</h1>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import * as G from '../../game/state.ts';
 import { MANAGERS, ATTR_LABEL, TRAINING_KEYS, MENTAL_KEYS } from '../../data/managers.ts';
 import type { ManagerId, ManagerType, CoachAttrs } from '../../data/managers.ts';
 import { Icon } from '../components/Icon.tsx';
@@ -10,13 +11,14 @@ import { CoachGuide } from '../components/CoachGuide.tsx';
  * same total of ability, spread differently, so this picks a style of football
  * rather than a difficulty. Whatever you choose, the club still takes you.
  */
-export function ArchetypeScreen({ onPick }: { onPick: (id: ManagerId) => void }) {
+export function ArchetypeScreen({ gs, onPick }: { gs: G.GameState; onPick: (id: ManagerId) => void }) {
   const [open, setOpen] = useState<ManagerId | null>(null);
+  const c = G.club(gs);
 
   return (
     <div className="screen pad stack pad-b" style={{ gap: 13 }}>
-      <Stepper current={1} />
-      <CoachGuide who="owner" text="ברוך הבא, נעים מאוד. אני מנהל הקבוצה, ולפני שאנחנו מתקדמים חשוב לי להבין איזה מאמן אתה. אני צריך לדעת מה אני מביא למועדון." />
+      <Stepper current={3} />
+      <CoachGuide who="owner" text={`${gs.profile.name}, לפני שאתה חותם ב${c.short} חשוב לי להבין איזה מאמן אתה. אני צריך לדעת מה אני מביא למועדון.`} />
 
       <div style={{ marginTop: 2 }}>
         <span className="eyebrow">הרזומה שלך</span>

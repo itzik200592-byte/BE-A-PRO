@@ -93,7 +93,7 @@ export function App() {
   return (
     <div className="frame">
       {gs.phase === 'onboard-archetype' && (
-        <ArchetypeScreen onPick={id => setGs(G.setArchetype(gs, id))} />
+        <ArchetypeScreen gs={gs} onPick={id => setGs(G.setArchetype(gs, id))} />
       )}
       {gs.phase === 'onboard-manager' && (
         <OnboardManager gs={gs} onDone={p => setGs(G.setProfile(gs, p))} />

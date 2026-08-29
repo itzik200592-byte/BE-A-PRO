@@ -216,7 +216,7 @@ export function ageProfile(age: number) {
 
 export function newGame(seed = 12345): GameState {
   return {
-    phase: 'onboard-archetype',
+    phase: 'onboard-manager',
     seasonSeed: seed,
     clubId: '',
     profile: { name: '', nickname: '', age: 38, type: 'mental' },
@@ -284,18 +284,30 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 
 /* ------------------------------------------------------------- onboarding */
 
+/** Your name, the first thing the chairman asks for. */
 export function setProfile(gs: GameState, profile: ManagerProfile): GameState {
-  // the CV picked at the start IS the coach, so his abilities come from it
-  return { ...gs, profile, coach: newCoach(profile.type), phase: 'onboard-club' };
+  return { ...gs, profile, phase: 'onboard-club' };
 }
 
-/** Step one of the opening: which coach you are. */
+/**
+ * The CV, asked for once the chairman knows who you are and which club you are
+ * joining. It comes after the club, so the budget the club set has to be redone
+ * here: a recruiter talks his way into more money than a youth coach does.
+ */
 export function setArchetype(gs: GameState, id: ManagerId): GameState {
+  const c = club(gs);
+  const m = getManager(id);
+  const ap = ageProfile(gs.profile.age);
   return {
     ...gs,
     profile: { ...gs.profile, type: id },
     coach: newCoach(id),
-    phase: 'onboard-manager',
+    meters: {
+      ...gs.meters,
+      money: Math.round(START_MONEY * m.budgetBias * c.traits.budget),
+      prestige: clamp(c.traits.prestige + ap.prestige, 0, 100),
+    },
+    phase: 'signing',
   };
 }
 
@@ -329,7 +341,7 @@ export function pickClub(gs: GameState, clubId: string): GameState {
       prestige: clamp(c.traits.prestige + ap.prestige, 0, 100),
     },
     market: makeMarket(c.tier, rng, 12, takenNames),
-    phase: 'signing',
+    phase: 'onboard-archetype',
   };
 }
 

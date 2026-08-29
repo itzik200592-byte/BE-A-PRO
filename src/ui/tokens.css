@@ -562,3 +562,28 @@ input{font-family:inherit;}
   from{transform:rotateY(90deg) scale(.9); opacity:0}
   to{transform:rotateY(0) scale(1); opacity:1}
 }
+
+/* the signing: the handshake in the club's old office, with the announcement
+   laid over it. The club name sits at the top, on the picture. */
+.signing-hero{
+  position:relative; overflow:hidden; isolation:isolate;
+  border-radius:var(--plate); border:1px solid var(--line-2);
+  box-shadow:var(--e2);
+}
+.signing-photo{display:block; width:100%; height:auto}
+.signing-shade{
+  position:absolute; inset:0; pointer-events:none;
+  background:
+    linear-gradient(180deg, rgba(5,16,10,.86) 0%, rgba(5,16,10,.12) 26%,
+                    rgba(5,16,10,.20) 52%, rgba(5,16,10,.92) 100%);
+}
+.signing-head{
+  position:absolute; top:0; inset-inline:0; z-index:2;
+  display:flex; align-items:center; gap:10px; padding:12px 14px;
+}
+.signing-club{
+  font-family:var(--font-display); font-weight:800; font-size:19px; line-height:1.1;
+  color:var(--ink); margin-top:2px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.signing-foot{position:absolute; bottom:0; inset-inline:0; z-index:2; padding:14px 15px 15px}

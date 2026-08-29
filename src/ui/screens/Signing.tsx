@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import * as G from '../../game/state.ts';
 import { Crest } from '../components/Crest.tsx';
+import { asset } from '../asset.ts';
 import { Icon } from '../components/Icon.tsx';
 import { OUTLETS } from '../../data/press.ts';
 import { LEAGUE_NAMES } from '../../data/clubs.ts';
@@ -50,19 +51,23 @@ export function SigningScreen({ gs, onDone }: {
     <div className="screen pad stack pad-b" style={{ gap: 14, minHeight: '100%' }}>
       <Stepper current={4} />
 
-      {/* the announcement */}
-      <div className="tile-hero" style={{ padding: 20, textAlign: 'center', animation: 'pop .45s var(--ease-out)' }}>
-        <div className="stack" style={{ alignItems: 'center', gap: 12 }}>
-          <Crest club={c} size={68} />
-          <div>
-            <div className="label-cap" style={{ letterSpacing: '.18em' }}>הודעה רשמית</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 23, marginTop: 7, lineHeight: 1.25 }}>
-              {c.name} מודיעה על מינויו של
-              <br /><span style={{ color: 'var(--gold)' }}>{who}</span>
-            </div>
-            <div className="sub" style={{ marginTop: 8 }}>
-              כמאמן הקבוצה ל{LEAGUE_NAMES[c.tier]}. חוזה לעונה, עם אופציה להארכה.
-            </div>
+      {/* the announcement, over the handshake in the club's old office */}
+      <div className="signing-hero" style={{ animation: 'pop .45s var(--ease-out)' }}>
+        <img src={asset('/signing.webp')} alt="" className="signing-photo" />
+        <div className="signing-shade" aria-hidden="true" />
+        <div className="signing-head">
+          <Crest club={c} size={38} />
+          <div style={{ minWidth: 0 }}>
+            <div className="label-cap" style={{ letterSpacing: '.16em' }}>הודעה רשמית</div>
+            <div className="signing-club">{c.name}</div>
+          </div>
+        </div>
+        <div className="signing-foot">
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, lineHeight: 1.25 }}>
+            מודיעה על מינויו של <span style={{ color: 'var(--gold-hi)' }}>{who}</span>
+          </div>
+          <div className="sub" style={{ marginTop: 5, fontSize: 13.5 }}>
+            כמאמן הקבוצה ל{LEAGUE_NAMES[c.tier]}. חוזה לעונה, עם אופציה להארכה.
           </div>
         </div>
       </div>
