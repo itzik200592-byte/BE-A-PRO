@@ -9,6 +9,7 @@ import type { Squad } from '../../data/squadGen.ts';
 import { Crest } from '../components/Crest.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Stepper } from '../components/Stepper.tsx';
+import { CoachGuide } from '../components/CoachGuide.tsx';
 import { PlayerCard } from '../components/PlayerCard.tsx';
 
 export const LINE_OF: Record<Position, 'gk' | 'def' | 'mid' | 'atk'> = {
@@ -164,6 +165,7 @@ export function SquadScreen({ gs, firstTime, onSwap, onDone }: {
   return (
     <div className="screen pad stack pad-b" style={{ gap: 12 }}>
       {firstTime && <Stepper current={4} />}
+      {firstTime && <CoachGuide text="אלה השחקנים שקיבלת. תכיר אותם טוב, לחץ על כל אחד לכרטיס. איתם אנחנו מתחילים לטפס." />}
       <div className="row" style={{ marginTop: 8 }}>
         <Crest club={c} size={46} />
         <div style={{ flex: 1 }}>

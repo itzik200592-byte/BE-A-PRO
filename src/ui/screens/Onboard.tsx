@@ -8,6 +8,7 @@ import type { City } from '../../data/cities.ts';
 import { Crest } from '../components/Crest.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Stepper } from '../components/Stepper.tsx';
+import { CoachGuide } from '../components/CoachGuide.tsx';
 import { formatMoney } from '../components/bits.tsx';
 
 /* ------------------------------------------------------------ 1. the manager */
@@ -29,7 +30,8 @@ export function OnboardManager({ gs, onDone }: { gs: G.GameState; onDone: (p: G.
   return (
     <div className="screen pad stack pad-b" style={{ gap: 16, minHeight: '100%' }}>
       <Stepper current={1} />
-      <div style={{ marginTop: 'clamp(8px,4vh,32px)' }}>
+      <CoachGuide text="ברוך הבא לדרך. אני אלווה אותך מכאן ועד לצמרת. קודם כל, איך קוראים לך?" />
+      <div style={{ marginTop: 'clamp(4px,2vh,20px)' }}>
         <span className="eyebrow">BE A PRO</span>
         <h1 className="h1" style={{ marginTop: 12 }}>איך קוראים לך?</h1>
         <p className="sub">שתי שורות וזהו. את מי שאתה באמת, כבר תגלה על הדרך.</p>
@@ -110,6 +112,7 @@ export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: st
   return (
     <div className="screen pad stack pad-b" style={{ gap: 14 }}>
       <Stepper current={2} />
+      <CoachGuide text={`${gs.profile.name}, עכשיו הלב של הכל. מאיזו עיר אתה? הקבוצה של העיר שלך תהיה הבית שלנו.`} />
       <div style={{ marginTop: 6 }}>
         <span className="eyebrow">{gs.profile.name}{gs.profile.nickname ? ` "${gs.profile.nickname}"` : ''}</span>
         <h1 className="h1" style={{ marginTop: 12 }}>מאיזו עיר אתה?</h1>
