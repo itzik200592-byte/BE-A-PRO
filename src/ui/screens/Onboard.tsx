@@ -126,7 +126,7 @@ export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: st
           <input
             value={q}
             onChange={e => { setQ(e.target.value); setChosen(null); }}
-            placeholder="הקלד עיר, למשל ראש העין"
+            placeholder="הקלד את שם העיר שלך"
             autoComplete="off" autoCorrect="off" spellCheck={false}
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--ink)', fontSize: 17, fontWeight: 700, padding: '12px 0' }}
           />

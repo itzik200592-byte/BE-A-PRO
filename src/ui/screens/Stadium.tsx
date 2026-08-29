@@ -1,3 +1,4 @@
+import { TopBack } from '../components/TopBack.tsx';
 import { useEffect, useRef, useState } from 'react';
 import { asset } from '../asset.ts';
 import * as G from '../../game/state.ts';
@@ -37,6 +38,7 @@ export function StadiumScreen({ gs, onBuild, onBack }: {
     <>
       <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 13 }}>
+        <TopBack onBack={onBack} />
         <div className="row" style={{ gap: 10, marginTop: 2 }}>
           <Icon name="flag" size={22} color="var(--gold)" />
           <div style={{ flex: 1, minWidth: 0 }}>

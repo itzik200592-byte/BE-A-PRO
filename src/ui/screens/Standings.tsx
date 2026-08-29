@@ -1,3 +1,4 @@
+import { TopBack } from '../components/TopBack.tsx';
 import { useState } from 'react';
 import * as G from '../../game/state.ts';
 import { sortedTable } from '../../game/league.ts';
@@ -25,6 +26,7 @@ export function StandingsScreen({ gs, onBack }: { gs: G.GameState; onBack: () =>
 
   return (
     <div className="screen pad stack pad-b" style={{ gap: 12, minHeight: '100%' }}>
+    <TopBack onBack={onBack} />
       <div className="row" style={{ gap: 10, marginTop: 6 }}>
         <Icon name="trophy" size={22} color="var(--gold)" />
         <div style={{ flex: 1, minWidth: 0 }}>

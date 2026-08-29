@@ -1,3 +1,4 @@
+import { TopBack } from '../components/TopBack.tsx';
 import * as G from '../../game/state.ts';
 import type { Player } from '../../engine/matchEngine.ts';
 import { overall } from '../../engine/matchEngine.ts';
@@ -22,6 +23,7 @@ export function CaptainScreen({ gs, onSet, onBack }: {
     <>
       <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 12 }}>
+        <TopBack onBack={onBack} />
         <div className="row" style={{ gap: 10, marginTop: 2 }}>
           <Icon name="star" size={22} color="var(--gold)" />
           <div style={{ flex: 1, minWidth: 0 }}>

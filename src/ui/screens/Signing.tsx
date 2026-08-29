@@ -82,8 +82,9 @@ export function SigningScreen({ gs, onDone }: {
             border: '1px solid var(--line)', borderRadius: '5px 18px 18px 18px',
             padding: '13px 15px', fontSize: 14.5, lineHeight: 1.6,
           }}>
-            ברוך הבא {gs.profile.nickname || gs.profile.name}. אני לא אלחץ עליך יותר מדי, רק תדע שהיציע פה לא סלחן.
-            תביא לנו עונה שנזכור לטובה ואני מאחוריך בכל דבר.
+            ברוך הבא {gs.profile.nickname || gs.profile.name} לקבוצת {c.short}. אנחנו בטוחים שתדע להוביל אותנו להצלחות.
+            חשוב שתדע, אחרי ההיכרות איתך הציפייה שלנו היא הצלחה כבר העונה.
+            ורק שתהיה מוכן, היציע פה בעייתי בהפסדים.
           </div>
         </div>
       </div>

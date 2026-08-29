@@ -1,3 +1,4 @@
+import { TopBack } from '../components/TopBack.tsx';
 import { useState } from 'react';
 import * as G from '../../game/state.ts';
 import { Meters } from '../components/bits.tsx';
@@ -23,6 +24,7 @@ export function InboxScreen({ gs, onAnswer, onDismissOutcome, onBack }: {
     <>
       <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 13 }}>
+        <TopBack onBack={onBack} />
         <div className="row" style={{ justifyContent: 'space-between', marginTop: 2 }}>
           <span className="eyebrow">תיבת הודעות</span>
           <span className="chip" style={{ background: 'rgba(255,255,255,.05)', color: 'var(--ink-dim)' }}>

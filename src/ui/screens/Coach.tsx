@@ -1,3 +1,4 @@
+import { TopBack } from '../components/TopBack.tsx';
 import * as G from '../../game/state.ts';
 import { getManager, TRAINING_KEYS, MENTAL_KEYS, ATTR_HINT, ATTR_LABEL } from '../../data/managers.ts';
 import { LICENCES, licence, licenceRank, requiredLicence, coachRating } from '../../game/coach.ts';
@@ -21,6 +22,7 @@ export function CoachScreen({ gs, onBack }: { gs: G.GameState; onBack: () => voi
     <>
       <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 13 }}>
+        <TopBack onBack={onBack} />
         {/* who you are */}
         <div className="tile-hero" style={{ padding: 16 }}>
           <div className="row" style={{ gap: 13 }}>

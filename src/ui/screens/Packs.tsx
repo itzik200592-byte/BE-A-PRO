@@ -1,3 +1,4 @@
+import { TopBack } from '../components/TopBack.tsx';
 import { useEffect, useRef, useState } from 'react';
 import * as G from '../../game/state.ts';
 import { overall } from '../../engine/matchEngine.ts';
@@ -28,6 +29,7 @@ export function PacksScreen({ gs, onWatchAd, onBuy, onSign, onSell, onBack }: {
   return (
     <>
       <div className="screen pad stack pad-b" style={{ gap: 12 }}>
+        <TopBack onBack={onBack} />
         <div className="row" style={{ marginTop: 6 }}>
           <div style={{ flex: 1 }}>
             <div className="h2">חבילות שחקנים</div>

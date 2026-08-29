@@ -50,7 +50,7 @@ function ArchetypeCard({ m, i, open, onToggle, onPick }: {
         onClick={onToggle} aria-expanded={open}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 900, fontSize: 17 }}>{m.name}</div>
-          <div className="sub" style={{ fontSize: 13, fontStyle: 'italic', marginTop: 3 }}>"{m.tagline}"</div>
+          <div className="sub" style={{ fontSize: 13, lineHeight: 1.45, marginTop: 3 }}>{m.tagline}</div>
         </div>
         <span style={{
           display: 'inline-block', color: 'var(--gold-hi)', fontWeight: 800, fontSize: 18,

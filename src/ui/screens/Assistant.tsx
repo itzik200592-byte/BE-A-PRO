@@ -1,3 +1,4 @@
+import { TopBack } from '../components/TopBack.tsx';
 import * as G from '../../game/state.ts';
 import { Meters } from '../components/bits.tsx';
 import { Icon } from '../components/Icon.tsx';
@@ -20,6 +21,7 @@ export function AssistantScreen({ gs, onHire, onFire, onBack }: {
     <>
       <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 13 }}>
+        <TopBack onBack={onBack} />
         <div className="row" style={{ gap: 10, marginTop: 2 }}>
           <Icon name="mic" size={22} color="var(--sky)" />
           <div style={{ flex: 1, minWidth: 0 }}>
