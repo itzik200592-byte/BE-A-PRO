@@ -39,7 +39,8 @@ export function Feed({ posts }: { posts: Post[] }) {
         <span style={{ fontSize: 11.5, color: 'var(--ink-faint)', fontWeight: 700 }}>{posts.length} עדכונים</span>
       </div>
 
-      <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+      {/* pills stay small, their tap area does not: see .feed-filter */}
+      <div className="row feed-filter" style={{ gap: 6, flexWrap: 'wrap' }}>
         {FILTERS.map(f => {
           const on = filter === f.key;
           const count = f.key === 'all' ? posts.length : posts.filter(p => p.kind === f.key).length;

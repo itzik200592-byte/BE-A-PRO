@@ -675,6 +675,89 @@ export function homeGateEstimate(gs: GameState): number {
   return gateIncome(gs.stadium.capacity, attendanceFill(gs, false), club(gs).tier);
 }
 
+/**
+ * What this season is FOR, in one glance.
+ *
+ * The hub used to show a table and leave the manager to work out what it meant.
+ * Nothing on the home screen said what winning looks like, how close he was, or
+ * what he stood to lose, so there was nothing pulling him into the next round.
+ * This is that missing sentence, and the ladder above it is the same fact drawn
+ * rather than written.
+ */
+export interface SeasonGoal {
+  pos: number;
+  teams: number;
+  pts: number;
+  played: number;
+  /** rounds still to play */
+  left: number;
+  zone: 'promo' | 'safe' | 'drop';
+  /** what the season is being played for */
+  target: string;
+  /** the one line under the ladder */
+  line: string;
+  /** promotion is on the pitch but the ground is too small */
+  blocked: boolean;
+  /** there is a division above to climb to, and one below to fall into */
+  up: boolean;
+  down: boolean;
+}
+
+export function seasonGoal(gs: GameState): SeasonGoal {
+  const table = sortedTable(gs.league);
+  const i = Math.max(0, table.findIndex(s => s.clubId === gs.clubId));
+  const me = table[i];
+  const pos = i + 1, teams = table.length;
+  const tier = club(gs).tier;
+  const up = tier < TOP_TIER;          // somewhere to climb to
+  const down = tier > 1;               // and something to fall out of
+  const left = Math.max(0, gs.league.rounds - me.played);
+  const gate = stadiumGate(gs);
+  const blocked = up && pos <= 2 && !!gate && !gate.meets;
+
+  const zone: SeasonGoal['zone'] =
+    up && pos <= 2 ? 'promo' : down && pos >= teams ? 'drop' : 'safe';
+  // a side in the drop is not playing for promotion, whatever the table says
+  const target = zone === 'drop' ? 'להישאר בליגה'
+    : up ? `עלייה ל${LEAGUE_NAMES[tier + 1]}` : 'אליפות המדינה';
+  const ptsAt = (n: number) => table[Math.min(teams, Math.max(1, n)) - 1]?.pts ?? 0;
+  const pt = (n: number) => `${n} ${n === 1 ? 'נקודה' : 'נקודות'}`;
+  const rounds = `${left} ${left === 1 ? 'מחזור' : 'מחזורים'}`;
+
+  let line: string;
+  if (me.played === 0) {
+    line = up ? 'שני המקומות הראשונים עולים ליגה. מתחילים.' : 'העונה נפתחת, והכל עוד פתוח.';
+  } else if (blocked) {
+    line = 'אתם במקום שעולה, אבל האצטדיון קטן מדי לליגה מעל.';
+  } else if (zone === 'promo') {
+    line = pos === 1
+      ? `ראשונים, ${pt(Math.max(0, me.pts - ptsAt(3)))} מעל אזור העלייה.`
+      : `במקום שעולה, ${pt(Math.max(0, me.pts - ptsAt(3)))} מעל הרודף.`;
+  } else if (zone === 'drop') {
+    line = `אחרונים. ${pt(Math.max(0, ptsAt(teams - 1) - me.pts))} מהצלה, ${rounds} נשארו.`;
+  } else {
+    const need = Math.max(0, (up ? ptsAt(2) : ptsAt(1)) - me.pts);
+    if (need === 0) {
+      line = up ? 'צמודים למקום שעולה. ניצחון אחד וזה שלכם.' : 'צמודים לפסגה. ניצחון אחד ואתם שם.';
+      // two points a round clawed back is already a heroic run; past that
+      // the promotion talk stops being encouraging and starts being a taunt
+    } else if (need <= left * 2) {
+      line = `${pt(need)} מ${up ? 'אזור העלייה' : 'הפסגה'}, ${rounds} נשארו.`;
+    } else {
+      // The climb is gone this season. Telling a manager he is fifteen points
+      // off with five games left is just rubbing it in, so the goal shrinks to
+      // the one place he can still take: the club immediately above him.
+      const above = table[i - 1];
+      const name = above ? (gs.league.clubs.find(c => c.id === above.clubId)?.short ?? '') : '';
+      line = above
+        ? `העלייה כבר לא בהישג. עקפו את ${name} (${pt(above.pts - me.pts)} מעליכם) וסיימו גבוה.`
+        : `${rounds} לסיום. סיימו את העונה בכבוד ותבנו סגל לעונה הבאה.`;
+    }
+  }
+
+  return { pos, teams, pts: me.pts, played: me.played, left, zone, target, line, blocked, up, down };
+}
+
 /** The promotion gate: what the division above wants, and whether we meet it. */
 export function stadiumGate(gs: GameState): { nextTier: number; need: number; meets: boolean } | null {
   const t = club(gs).tier;

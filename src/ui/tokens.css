@@ -605,3 +605,126 @@ input{font-family:inherit;}
 .form-num{font-family:var(--font-display); font-size:16px; letter-spacing:.04em; color:var(--ink);}
 .form-pick[data-on="1"] .form-num{color:var(--gold-hi)}
 .form-name{font-size:11.5px; font-weight:700;}
+
+/* ================================================================ the hub
+   The home screen. Everything here exists to answer three questions in order:
+   what am I playing for, who is next, what else is there. Nothing carries an
+   explaining sentence any more; a dot or a number says it instead. */
+
+.hub-pad{padding-bottom:calc(104px + env(safe-area-inset-bottom));}
+
+/* ---- form, the last five, newest on the outside */
+.form-dots{display:flex; gap:4px; flex:none;}
+.form-dots span{width:8px; height:8px; border-radius:50%; background:var(--ink-faint); opacity:.45;}
+.form-dots span[data-r="W"]{background:var(--win); opacity:1;}
+.form-dots span[data-r="D"]{background:var(--ink-dim); opacity:.75;}
+.form-dots span[data-r="L"]{background:var(--loss); opacity:1;}
+
+/* ---- the goal. Its tone is set inline: gold in the promotion places,
+   red in the drop, quiet in between. */
+.goal{
+  display:block; width:100%; text-align:start;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--tone) 9%,var(--surface-2)),var(--surface));
+  border:1px solid color-mix(in srgb,var(--tone) 30%,transparent);
+  border-radius:var(--plate); padding:12px 14px 13px; cursor:pointer;
+  transition:transform var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out);
+}
+.goal:active{transform:scale(.985)}
+.goal-pos{font-size:13px; color:var(--ink-dim); font-weight:700; white-space:nowrap;}
+.goal-frac{margin-inline-start:4px; color:var(--ink-faint); font-size:12px;}
+.goal-pos b{font-family:var(--font-display); font-size:19px; color:var(--tone);}
+
+.goal-ladder{display:flex; gap:3px; margin:11px 0 9px;}
+.goal-ladder span{
+  flex:1; height:5px; border-radius:3px; background:rgba(255,255,255,.09);
+  transition:background var(--t-mid) var(--ease-out), box-shadow var(--t-mid) var(--ease-out);
+}
+.goal-ladder span[data-k="up"]{background:color-mix(in srgb,var(--gold) 34%,transparent);}
+.goal-ladder span[data-k="down"]{background:color-mix(in srgb,var(--loss) 34%,transparent);}
+.goal-ladder span[data-me="1"]{
+  background:var(--tone); height:9px; margin-top:-2px;
+  box-shadow:0 0 10px color-mix(in srgb,var(--tone) 55%,transparent);
+}
+.goal-line{font-size:13.5px; line-height:1.5; color:var(--ink-dim); font-weight:600;}
+
+/* ---- the match, the one thing with real estate */
+.match-hero{
+  position:relative; overflow:hidden;
+  background:linear-gradient(165deg,var(--surface-2),var(--surface) 62%,var(--bg));
+  border:1px solid rgba(233,185,73,.20); border-radius:var(--plate);
+  padding:15px 15px 16px;
+  box-shadow:0 16px 34px rgba(0,0,0,.42);
+}
+.match-hero::before{
+  content:""; position:absolute; inset-inline:0; top:-45%; height:150%;
+  background:radial-gradient(60% 44% at 50% 40%,rgba(233,185,73,.10),transparent 70%);
+  pointer-events:none;
+}
+.match-hero > *{position:relative;}
+.match-vs{
+  font-family:var(--font-display); font-size:18px; color:var(--gold);
+  letter-spacing:.05em; flex:none; padding-top:14px;
+}
+.chip-quiet{background:rgba(255,255,255,.05); color:var(--ink-dim);}
+.chip-derby{background:rgba(226,72,77,.16); color:var(--loss); border:1px solid rgba(226,72,77,.3);}
+
+/* ---- the grid. Eight rooms, one word each. */
+.hub-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:8px;}
+.hub-cell{
+  position:relative; display:flex; flex-direction:column; align-items:center; gap:6px;
+  min-height:76px; padding:12px 4px 10px;
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--plate-sm);
+  cursor:pointer;
+  transition:transform var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out);
+}
+.hub-cell:active{transform:scale(.96); background:var(--surface-2);}
+.hub-cell-icon{position:relative; display:grid; place-items:center; width:24px; height:24px;}
+.hub-cell-label{font-size:12.5px; font-weight:700; color:var(--ink-dim); line-height:1;}
+.hub-cell-count{font-size:11px; color:var(--ink-faint); font-weight:700; line-height:1;}
+.hub-dot{
+  position:absolute; top:-3px; inset-inline-end:-4px;
+  width:8px; height:8px; border-radius:50%; border:1.5px solid var(--surface);
+}
+.hub-badge{
+  position:absolute; top:-7px; inset-inline-end:-9px;
+  min-width:17px; height:17px; padding:0 4px; border-radius:9px;
+  background:var(--gold); color:#111; font-size:11px; font-weight:800;
+  display:inline-flex; align-items:center; justify-content:center;
+  border:1.5px solid var(--surface);
+}
+
+/* ---- the one alert that still speaks in words, because it blocks */
+.inbox-strip{
+  display:flex; align-items:center; gap:10px; width:100%; min-height:48px; padding:11px 13px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--loss) 11%,var(--surface-2)),var(--surface));
+  border:1px solid color-mix(in srgb,var(--loss) 38%,transparent);
+  border-radius:var(--plate-sm); cursor:pointer;
+  transition:transform var(--t-fast) var(--ease-out);
+}
+.inbox-strip:active{transform:scale(.985)}
+
+/* ---- the table opens the full table, so it needs no row of its own */
+.hub-table{display:block; width:100%; text-align:start; background:none; border:0; padding:0; cursor:pointer;}
+.hub-table:active{transform:scale(.99)}
+
+/* ---- the button follows you down the page */
+.hub-sticky{
+  position:fixed; inset-inline:0; bottom:0; z-index:40;
+  padding:10px 16px calc(12px + env(safe-area-inset-bottom));
+  background:linear-gradient(180deg,transparent,rgba(6,10,8,.86) 38%,var(--bg));
+  transform:translateY(120%); opacity:0; pointer-events:none;
+  transition:transform var(--t-mid) var(--ease-out), opacity var(--t-mid) var(--ease-out);
+}
+.hub-sticky[data-on="1"]{transform:translateY(0); opacity:1; pointer-events:auto;}
+.hub-sticky .btn{animation:none;}
+
+@media (prefers-reduced-motion:reduce){
+  .hub-sticky{transition:opacity var(--t-fast) linear; transform:none;}
+  .hub-cell:active,.goal:active,.inbox-strip:active{transform:none;}
+}
+
+/* The timeline's filter pills read best small, but a 32px pill is under the
+   44px minimum, so the tap area is pushed out past the ink instead. */
+.feed-filter{position:relative;}
+.feed-filter button{position:relative; touch-action:manipulation;}
+.feed-filter button::after{content:""; position:absolute; inset:-7px -3px;}
