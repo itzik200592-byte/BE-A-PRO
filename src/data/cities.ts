@@ -31,6 +31,7 @@ export const CITIES: City[] = [
   { name: 'ראשון לציון', lat: 31.96, lon: 34.80, size: 3 },
   { name: 'פתח תקווה', lat: 32.09, lon: 34.89, size: 3 },
   { name: 'חולון', lat: 32.01, lon: 34.77, size: 3 },
+  { name: 'אזור', lat: 32.02, lon: 34.80, size: 1 },
   { name: 'רמת גן', lat: 32.07, lon: 34.82, size: 3 },
   { name: 'בת ים', lat: 32.02, lon: 34.75, size: 2 },
   { name: 'גבעתיים', lat: 32.07, lon: 34.81, size: 2 },
