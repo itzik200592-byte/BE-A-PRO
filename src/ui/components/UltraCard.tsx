@@ -162,8 +162,8 @@ const CSS = `
    and the figure have to sit above them. Without bars the lower half is free
    and everything drops back down. Getting this wrong put the name straight
    through the stats. */
-.uk[data-bars="1"] .uk-plate{bottom:calc(var(--w)*.475)}
-.uk[data-bars="1"] .uk-sil{bottom:calc(var(--w)*.60);width:calc(var(--w)*.52)}
+.uk[data-bars="1"] .uk-plate{bottom:calc(var(--w)*.59)}
+.uk[data-bars="1"] .uk-sil{bottom:calc(var(--w)*.665);width:calc(var(--w)*.48)}
 .uk-bar{display:grid;grid-template-columns:calc(var(--w)*.115) 1fr calc(var(--w)*.095);align-items:center;
   gap:calc(var(--w)*.026);font-size:calc(var(--w)*.041);color:#9fb0a6}
 .uk-track{height:calc(var(--w)*.022);background:rgba(255,255,255,.09);overflow:hidden}
