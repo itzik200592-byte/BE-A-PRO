@@ -100,7 +100,7 @@ function separate(all: { sl: Slot; p: Pt }[], holder: string | null) {
     }
   }
 }
-type B_After = '' | 'corner' | 'goalkick' | 'cross';
+type B_After = '' | 'corner' | 'goalkick' | 'cross' | 'goal';
 
 const reduceMotion = typeof window !== 'undefined'
   && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -138,6 +138,10 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
       rx: null as string | null,      // who the ball is played to
       after: '' as B_After,
       set: '' as '' | 'cross',        // a set piece waiting on the taker
+      // a commentary event being played out on the pitch, so a goal is scored
+      // where a goal belongs instead of appearing from the halfway line
+      script: null as null | { scored: boolean; home: boolean },
+      restartFor: null as null | boolean,   // who kicks off after a goal
       surge: 0, surgeHome: true,      // bodies into the box for a corner
     };
 
@@ -166,6 +170,28 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
       if (B.set === 'cross') {                       // the corner is whipped in
         B.set = '';
         kick(B.surgeHome ? 0.90 : 0.10, 0.5 + (rnd() - 0.5) * 0.28, 0.9, null);
+        return;
+      }
+
+      // kick off again from the centre circle, the side that conceded restarts
+      if (B.restartFor !== null) {
+        const side = B.restartFor; B.restartFor = null;
+        let who: string | null = null, bd = Infinity;
+        for (const sl of slotsRef.current) {
+          if (sl.home !== side || sl.i === 0) continue;
+          const q = pos.get(sl.id); if (!q) continue;
+          const d = Math.hypot(q.x - 0.5, q.y - 0.5);
+          if (d < bd) { bd = d; who = sl.id; }
+        }
+        kick(0.5, 0.5, 1.5, who);
+        return;
+      }
+
+      // the commentary said something happened at that goal, so finish it there
+      if (B.script) {
+        const sc = B.script; B.script = null;
+        kick(goalOf(sc.home), clamp(0.5 + (rnd() - 0.5) * 0.30, 0.33, 0.67), 2.1, null,
+          sc.scored ? 'goal' : (rnd() < 0.5 ? 'corner' : 'goalkick'));
         return;
       }
       const me = all.find(a => a.sl.id === B.holder);
@@ -285,13 +311,22 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
         B.until = t + 1.2;                            // the beat before the delivery
         return;
       }
+      if (B.after === 'goal') {                       // it is in the net
+        B.after = ''; B.surge = 0;
+        B.holder = null; B.rx = null;
+        B.until = t + 1.1;                            // let it sit in the goal
+        B.restartFor = !B.surgeHome;                  // the side that conceded kicks off
+        return;
+      }
       if (B.after === 'goalkick') {                   // keeper restarts it
         B.after = '';
         const gk = gkOf(B.x > 0.5 ? false : true);
         if (gk) { B.holder = gk; B.until = t + 1.0; B.surge = 0; return; }
       }
       B.holder = B.rx; B.rx = null;
-      B.until = t + 0.35 + rnd() * 0.7;
+      // a man about to finish a scripted goal does not stand on the ball first,
+      // so the strike follows the commentary line rather than trailing it
+      B.until = t + (B.script ? 0.16 : 0.35 + rnd() * 0.7);
       // surge is not cleared here: bodies must still be in the box as a cross lands
     };
 
@@ -302,12 +337,33 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
       const t = now / 1000;
       const off = s.phase === 'halftime' || s.phase === 'done';
 
-      // a match event yanks the ball to that end
+      // A goal in the commentary has to be a goal on the pitch. The ball used to
+      // be teleported into the net from wherever it was, so a line saying the
+      // striker had scored could arrive while the ball sat on the halfway line.
+      // Now the event is played out: the ball is slid to the attacker closest to
+      // that goal and he finishes it, which is both readable and in step with
+      // the caption the manager is reading.
       if (s.events.length !== seen) {
         seen = s.events.length;
         const e = [...s.events].reverse().find(v =>
           v.type === 'goal' || v.type === 'penalty_goal' || v.type === 'chance' || v.type === 'penalty_miss');
-        if (e) kick(e.teamId === s.home.id ? 0.94 : 0.06, 0.5 + (rnd() - 0.5) * 0.3, 1.4, null, 'goalkick');
+        if (e) {
+          const forHome = e.teamId === s.home.id;
+          const scored = e.type === 'goal' || e.type === 'penalty_goal';
+          const goal = goalOf(forHome);
+          B.script = { scored, home: forHome };
+          B.surge = 1; B.surgeHome = forHome;
+          let who: Slot | null = null, wp: Pt | null = null, bd = Infinity;
+          for (const sl of slotsRef.current) {
+            if (sl.home !== forHome || sl.i === 0) continue;
+            const q = pos.get(sl.id); if (!q) continue;
+            const d = Math.abs(goal - q.x);
+            if (d < bd) { bd = d; who = sl; wp = q; }
+          }
+          // the ball into the box for him, quick but visible, never instant
+          const into = goal + (forHome ? -0.11 : 0.11);
+          kick(into, clamp(wp ? wp.y : 0.5, 0.30, 0.70), 2.3, who ? who.id : null);
+        }
       }
 
       // play follows the ball, the shape follows play
