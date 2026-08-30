@@ -6,10 +6,13 @@ import type { Club } from '../../data/clubs.ts';
 /**
  * The live 2D pitch.
  *
- * Two things drive it. The ball runs a possession state machine: it is held at
- * someone's feet, then played, a short pass, a switch across the pitch, a shot,
- * and shots turn into corners and goal kicks, so the rhythm is football rhythm
- * rather than a dot sliding around. And the players are individuals, not a
+ * Two things drive it. The ball runs a possession state machine, and every
+ * decision on it is measured against where the goal actually is: a man in sight
+ * of goal shoots rather than passing back, a keeper distributes short instead of
+ * hoofing it at the other keeper, and passes are scored on progress, space and
+ * width so the ball reaches the flanks instead of circling the centre. Shots
+ * turn into corners and goal kicks, so the rhythm is football rhythm rather
+ * than a dot sliding around. And the players are individuals, not a
  * block: the man on the ball goes to the ball, the receiver runs onto the pass,
  * the nearest opponent presses, and each player breaks his slot now and then,
  * a full back overlaps, a midfielder makes a late run past the striker, a
@@ -152,7 +155,13 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
       B.sp = sp; B.fly = true; B.rx = rx; B.after = after; B.holder = null;
     };
 
-    /** Decide what the man on the ball does next. */
+    /**
+     * What the man on the ball does. Football decisions, in order: a keeper
+     * distributes, a man in sight of goal shoots, otherwise he looks for the
+     * best pass and carries when nothing is on. Every option is scored against
+     * where the goal actually is, which is what stops strikers passing back and
+     * keeps the ball off the centre circle.
+     */
     const act = (t: number, all: { sl: Slot; p: Pt }[]) => {
       if (B.set === 'cross') {                       // the corner is whipped in
         B.set = '';
@@ -167,34 +176,92 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
         B.until = t + 0.35;                          // always advances, never busy loops
         return;
       }
-      const mates = all.filter(a => a.sl.home === me.sl.home && a.sl.id !== me.sl.id && a.sl.i !== 0);
-      const opps = all.filter(a => a.sl.home !== me.sl.home);
-      const goal = goalOf(me.sl.home);
-      const fwd = me.sl.home ? 1 : -1;
-      const inFinal = me.sl.home ? me.p.x > 0.68 : me.p.x < 0.32;
-      const r = rnd();
 
-      if (inFinal && r < 0.20) {                     // shot
-        kick(goal, 0.5 + (rnd() - 0.5) * 0.22, 1.5, null, rnd() < 0.55 ? 'corner' : 'goalkick');
+      const home = me.sl.home;
+      const goal = goalOf(home);                     // the goal HE attacks
+      const fwd = home ? 1 : -1;
+      const mates = all.filter(a => a.sl.home === home && a.sl.id !== me.sl.id && a.sl.i !== 0);
+      const opps = all.filter(a => a.sl.home !== home && a.sl.i !== 0);
+      const distGoal = Math.abs(goal - me.p.x);      // 0 at the goal line
+      const nearestOpp = (p: Pt) => {
+        let d = Infinity;
+        for (const o of opps) d = Math.min(d, Math.hypot(o.p.x - p.x, o.p.y - p.y));
+        return d;
+      };
+
+      /* ---- the keeper. He distributes, he never shoots, and he never hits
+         the length of the pitch into the other keeper. */
+      if (me.sl.i === 0) {
+        // anyone in front of him but still inside his own half or just past it
+        const outs = mates
+          .map(a => ({ a, adv: distGoal - Math.abs(goal - a.p.x), d: Math.hypot(a.p.x - me.p.x, a.p.y - me.p.y) }))
+          .filter(o => o.adv > 0.04 && o.d < 0.42)
+          .sort((x, y) => y.adv - x.adv);
+        const to = outs.length
+          ? (rnd() < 0.6 ? outs[outs.length - 1].a : outs[Math.floor(rnd() * Math.min(3, outs.length))].a)
+          : null;
+        if (to) { kick(to.p.x, to.p.y, 0.9, to.sl.id); return; }
+        // nothing on, a clearance up his own flank, never past the halfway mark
+        kick(me.p.x + fwd * 0.34, me.p.y < 0.5 ? 0.18 : 0.82, 0.85, null);
         return;
       }
-      if (r < 0.34) {                                // turnover, an opponent reads it
-        const near = opps.sort((a, b) => (a.p.x - me.p.x) ** 2 + (a.p.y - me.p.y) ** 2 - ((b.p.x - me.p.x) ** 2 + (b.p.y - me.p.y) ** 2))[0];
-        if (near) { kick(near.p.x, near.p.y, 0.75, near.sl.id); return; }
-      }
-      if (r < 0.50) {                                // switch of play, a long ball across
-        const far = mates.sort((a, b) => Math.abs(b.p.y - me.p.y) - Math.abs(a.p.y - me.p.y))[0];
-        if (far) { kick(far.p.x + fwd * 0.04, far.p.y, 0.62, far.sl.id); return; }
-      }
-      if (r < 0.60) { B.until = t + 0.5 + rnd() * 0.6; return; }   // carries it
 
-      // short pass, one of the nearer options, nudged forward
-      const near = mates
-        .map(a => ({ a, d: (a.p.x - me.p.x) ** 2 + (a.p.y - me.p.y) ** 2 - (a.p.x - me.p.x) * fwd * 0.12 }))
-        .sort((x, y) => x.d - y.d).slice(0, 4);
-      const to = near[Math.floor(rnd() * near.length)]?.a;
-      if (to) kick(to.p.x + fwd * 0.03, to.p.y, 0.85, to.sl.id);
-      else B.until = t + 0.6;
+      /* ---- shooting. The closer and the more central he is, the more likely
+         he lets fly. Inside the box he almost always does. */
+      const lane = 1 - Math.min(1, Math.abs(me.p.y - 0.5) / 0.34);   // 1 dead centre
+      const shotChance =
+        distGoal < 0.12 ? 0.88 :
+        distGoal < 0.20 ? 0.62 * (0.55 + 0.45 * lane) :
+        distGoal < 0.30 ? 0.30 * (0.35 + 0.65 * lane) :
+        distGoal < 0.40 ? 0.10 * lane : 0;
+      if (rnd() < shotChance) {
+        const spread = 0.06 + distGoal * 0.35;       // long range is wilder
+        kick(goal, clamp(0.5 + (rnd() - 0.5) * spread * 2, 0.30, 0.70), 1.55, null,
+          rnd() < 0.5 ? 'corner' : 'goalkick');
+        return;
+      }
+
+      /* ---- the pass. Every mate is scored: getting the ball closer to goal is
+         what matters, then having space, then being a sensible distance away.
+         Width is rewarded so the ball actually reaches the flanks. */
+      const opts = mates.map(a => {
+        const adv = distGoal - Math.abs(goal - a.p.x);         // + is progress
+        const d = Math.hypot(a.p.x - me.p.x, a.p.y - me.p.y);
+        const space = Math.min(0.22, nearestOpp(a.p));
+        const width = Math.abs(a.p.y - 0.5);                   // 0 centre .. .5 touchline
+        const range = d < 0.07 ? -0.5 : d > 0.46 ? -0.9 : 1 - Math.abs(d - 0.20) * 2.2;
+        return { a, score: adv * 3.4 + space * 2.6 + range * 1.1 + width * 0.9 + rnd() * 0.5 };
+      }).sort((x, y) => y.score - x.score);
+
+      const best = opts[0];
+      const pressed = nearestOpp(me.p) < 0.075;
+
+      // Possession changes hands because someone is closed down, not because
+      // the best pass happened to score badly. Tying it to pass quality made
+      // players hand the ball over whenever nobody was free, which is not
+      // football.
+      if (opps.length && rnd() < (pressed ? 0.20 : 0.045)) {
+        const near = opps.reduce((x, y) =>
+          Math.hypot(y.p.x - me.p.x, y.p.y - me.p.y) < Math.hypot(x.p.x - me.p.x, x.p.y - me.p.y) ? y : x);
+        kick(near.p.x, near.p.y, 0.8, near.sl.id);
+        return;
+      }
+
+      // room ahead and nobody on him, he drives at the defence
+      if (!pressed && distGoal > 0.16 && rnd() < 0.32) {
+        B.until = t + 0.4 + rnd() * 0.4;
+        return;
+      }
+
+      if (best) {
+        // weighted to the better options, but a sideways or backwards ball is
+        // a real choice when nothing is on ahead
+        const pick = opts[Math.floor(rnd() * rnd() * Math.min(3, opts.length))] ?? best;
+        const lead = Math.min(0.05, Math.max(0, distGoal - 0.1) * 0.2);   // pass into his run
+        kick(pick.a.p.x + fwd * lead, pick.a.p.y, 0.95, pick.a.sl.id);
+        return;
+      }
+      B.until = t + 0.5;
     };
 
     /** The ball arrived somewhere. Set pieces branch from here. */
