@@ -9,6 +9,9 @@
  *   node -e "import('./matchEngine.ts').then(m => console.log(m.sanityCheck(A, B, 10000)))"
  */
 
+import { formation } from '../data/formations.ts';
+import type { FormationId } from '../data/formations.ts';
+
 /* ------------------------------------------------------------------ types */
 
 export type Position =
@@ -48,7 +51,7 @@ export type Approach = 'defensive' | 'balanced' | 'attacking';
 export type Press = 'low' | 'mid' | 'high';
 
 export interface Tactic {
-  formation: '4-3-3' | '4-4-2' | '4-2-3-1' | '3-5-2' | '5-3-2';
+  formation: FormationId;
   approach: Approach;
   press: Press;
 }
@@ -182,6 +185,7 @@ function meanOvr(players: Player[], group: Position[]): number {
   return sel.reduce((s, p) => s + overall(p), 0) / sel.length;
 }
 
+/** what the shape is worth. data/formations.ts is the single source of truth */
 const APPROACH_MOD: Record<Approach, { att: number; def: number }> = {
   defensive:  { att: 0.94, def: 1.06 },
   balanced:   { att: 1.00, def: 1.00 },
@@ -212,15 +216,16 @@ export function teamRatings(team: TeamInput): TeamRatings {
   const morale = 0.96 + 0.09 * (avg(team.players.map(p => p.morale)) / 100);
   const home = team.isHome ? 1.05 : 1.0;
   const ap = APPROACH_MOD[team.tactic.approach];
+  const fm = formation(team.tactic.formation);
   const pr = PRESS_MOD[team.tactic.press];
 
   const base = chem * fitness * morale * home;
   const cAtt = team.coach?.att ?? 1;
   const cDef = team.coach?.def ?? 1;
   return {
-    att: att * base * ap.att * cAtt,
+    att: att * base * ap.att * fm.att * cAtt,
     mid: mid * base * pr.mid,
-    def: def * base * ap.def * pr.def * cDef,
+    def: def * base * ap.def * fm.def * pr.def * cDef,
     gk,
   };
 }

@@ -587,3 +587,21 @@ input{font-family:inherit;}
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .signing-foot{position:absolute; bottom:0; inset-inline:0; z-index:2; padding:14px 15px 15px}
+
+/* ---- formation picker: three shapes, drawn from the live pitch's own slots */
+.form-row{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+.form-pick{
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--plate-sm);
+  padding:9px 5px 8px; color:var(--ink-dim); cursor:pointer;
+  transition:border-color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out), transform var(--t-fast) var(--ease-out);
+}
+.form-pick:active{transform:scale(.97)}
+.form-pick[data-on="1"]{
+  border-color:var(--gold); background:linear-gradient(180deg,rgba(233,185,73,.13),var(--surface));
+  box-shadow:0 0 0 1px rgba(233,185,73,.25);
+}
+.form-map{width:100%; height:auto; display:block; max-width:70px;}
+.form-num{font-family:var(--font-display); font-size:16px; letter-spacing:.04em; color:var(--ink);}
+.form-pick[data-on="1"] .form-num{color:var(--gold-hi)}
+.form-name{font-size:11.5px; font-weight:700;}

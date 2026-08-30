@@ -13,6 +13,7 @@ import { GEMS_AT_START } from './packs.ts';
 import { primePlayerIds } from '../data/squadGen.ts';
 import { setDerbies, derbiesFromClubs } from '../data/clubs.ts';
 import { newCoach } from './coach.ts';
+import { DEFAULT_FORMATION } from '../data/formations.ts';
 
 const KEY = 'beapro.career.v1';
 const VERSION = 1;
@@ -77,6 +78,8 @@ export function loadCareer(): GameState | null {
   // gracefully fill fields added in later versions so old saves keep working
   const patched: GameState = {
     ...s,
+    // the formation arrived after this save format, default the old ones
+    tactic: { ...s.tactic, formation: s.tactic?.formation ?? DEFAULT_FORMATION },
     chronicle: s.chronicle ?? [],
     chronicleSeen: s.chronicleSeen ?? 0,
     inbox: s.inbox ?? [],

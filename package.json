@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "sim": "node --experimental-strip-types src/engine/sanity.ts"
+    "sim": "node --experimental-strip-types src/engine/sanity.ts",
+    "check:pitch": "node --experimental-strip-types scripts/pitch-check.mts",
+    "check:formations": "node --experimental-strip-types scripts/formation-check.mts"
   },
   "dependencies": {
     "react": "^18.3.1",

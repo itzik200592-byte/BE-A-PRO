@@ -9,6 +9,8 @@ import type { LeagueState, Fixture } from './league.ts';
 import { initLeague, applyResult, sortedTable, buildFixtures, emptyTable } from './league.ts';
 import { LEAGUE_C, isDerby, LEAGUE_NAMES, setDerbies, derbiesFromClubs } from '../data/clubs.ts';
 import { buildRegionLeague } from '../data/cities.ts';
+import { DEFAULT_FORMATION, formationForClub } from '../data/formations.ts';
+import type { FormationId } from '../data/formations.ts';
 import { TEMPLATES, eligible, rollDilemma } from '../data/dilemmas.ts';
 import type { RolledDilemma, DilemmaEffect, Ctx as DilemmaCtx } from '../data/dilemmas.ts';
 import { pickPressQuestion } from '../data/press.ts';
@@ -63,7 +65,7 @@ export interface StadiumReveal { image: number; capacity: number; addSeats: numb
 
 /** What the round earned and what it cost to run. */
 export interface RoundLedger extends RoundCosts { prize: number; gate: number; net: number; }
-export interface Tactic { approach: Approach; press: Press; }
+export interface Tactic { approach: Approach; press: Press; formation: FormationId; }
 export interface RoundResult { homeId: string; awayId: string; hg: number; ag: number; }
 
 export interface ManagerProfile {
@@ -221,7 +223,7 @@ export function newGame(seed = 12345): GameState {
     clubId: '',
     profile: { name: '', nickname: '', age: 38, type: 'mental' },
     meters: { money: START_MONEY, morale: 65, prestige: 30 },
-    tactic: { approach: 'balanced', press: 'mid' },
+    tactic: { approach: 'balanced', press: 'mid', formation: DEFAULT_FORMATION },
     week: 1,
     league: initLeague(LEAGUE_C, seed),
     market: [],
@@ -1346,7 +1348,7 @@ function teamInput(gs: GameState, clubId: string, isHome: boolean, tactic?: Tact
   const sq = gs.league.squads[clubId];
   const c = gs.league.clubs.find(x => x.id === clubId)!;
   const players: Player[] = sq.starters.map(p => ({ ...p }));
-  const t = tactic ?? { approach: 'balanced' as Approach, press: 'mid' as Press };
+  const t = tactic ?? { approach: 'balanced' as Approach, press: 'mid' as Press, formation: DEFAULT_FORMATION };
   const mine = clubId === gs.clubId;
   if (mine) {
     const bias = (gs.meters.morale - 65) / 100;
@@ -1354,7 +1356,8 @@ function teamInput(gs: GameState, clubId: string, isHome: boolean, tactic?: Tact
   }
   return {
     id: clubId, name: c.name, players,
-    tactic: { formation: '4-3-3', approach: t.approach, press: t.press },
+    // your shape is the one you picked, every other club keeps its own
+    tactic: { formation: mine ? (t.formation ?? DEFAULT_FORMATION) : formationForClub(clubId), approach: t.approach, press: t.press },
     // your side plays to the manager on the touchline, the AI keeps the
     // neutral baseline the engine was calibrated against
     chemistry: mine ? coachChemistry(gs.coach) : 0.7,
@@ -1599,9 +1602,9 @@ export function demoSeason(rounds = 8): GameState {
     const inp = liveMatchInput(gs);
     const res = simulateMatch(
       { id: inp.homeId, name: inp.homeName, players: inp.iAmHome ? inp.playerStarters : inp.oppStarters,
-        tactic: { formation: '4-3-3', approach: 'balanced', press: 'mid' }, chemistry: 0.7, isHome: true },
+        tactic: { formation: DEFAULT_FORMATION, approach: 'balanced', press: 'mid' }, chemistry: 0.7, isHome: true },
       { id: inp.awayId, name: inp.awayName, players: inp.iAmHome ? inp.oppStarters : inp.playerStarters,
-        tactic: { formation: '4-3-3', approach: 'balanced', press: 'mid' }, chemistry: 0.7, isHome: false },
+        tactic: { formation: DEFAULT_FORMATION, approach: 'balanced', press: 'mid' }, chemistry: 0.7, isHome: false },
       inp.seed);
     gs = commitRound(gs, res);
     gs = continueFromResult(gs);

@@ -15,14 +15,16 @@
 import { createRng, teamRatings, overall } from '../engine/matchEngine.ts';
 import type { Player, Approach, Press, MatchResult, MatchEvent, TeamInput } from '../engine/matchEngine.ts';
 import { assignTraits } from '../data/personalities.ts';
+import { DEFAULT_FORMATION, formationForClub } from '../data/formations.ts';
+import type { FormationId } from '../data/formations.ts';
 import { playerMods, teamMoraleBump } from './traitEffects.ts';
 import type { PlayerMods } from './traitEffects.ts';
 
 export type Corner = 'left' | 'center' | 'right';
 
-/** The player's live tactic, formation is fixed at 4-3-3 for the prototype. */
+/** The player's live tactic: shape, approach, press, plus the in match shout. */
 export type TacticMode = 'normal' | 'allin' | 'highpress';
-export interface SimpleTactic { approach: Approach; press: Press; mode?: TacticMode; }
+export interface SimpleTactic { approach: Approach; press: Press; formation?: FormationId; mode?: TacticMode; }
 
 /**
  * The in match tactic shout, applied ONLY in the live engine, never in the
@@ -119,7 +121,7 @@ function rand(st: LiveState): number {
 function sideRatings(s: Side) {
   const ti: TeamInput = {
     id: s.id, name: s.name, players: s.onPitch,
-    tactic: { formation: '4-3-3', approach: s.tactic.approach, press: s.tactic.press },
+    tactic: { formation: s.tactic.formation ?? DEFAULT_FORMATION, approach: s.tactic.approach, press: s.tactic.press },
     // the manager on the touchline counts here too. Without this the coach
     // would only shape the AI's matches and never the one you actually watch
     chemistry: s.coach?.chemistry ?? 0.7,
@@ -208,7 +210,7 @@ export function createLive(input: {
     name: input.iAmHome ? input.awayName : input.homeName,
     isHome: !input.iAmHome, isPlayer: false,
     onPitch: oStarters, bench: oBench,
-    tactic: { approach: 'balanced', press: 'mid' },
+    tactic: { approach: 'balanced', press: 'mid', formation: formationForClub(input.iAmHome ? input.awayId : input.homeId) },
   };
 
   const st: LiveState = {
