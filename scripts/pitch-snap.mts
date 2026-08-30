@@ -14,6 +14,8 @@ import type { FormationId } from '../src/data/formations.ts';
 
 const HOME: FormationId = (process.argv[3] as FormationId) || '4-4-2';
 const AWAY: FormationId = (process.argv[4] as FormationId) || '4-3-3';
+/** "goal" samples densely through one scripted move so the build up is visible */
+const MODE = process.argv[5] === 'goal' ? 'goal' : 'match';
 
 function rng(seed: number) {
   let s = seed >>> 0;
@@ -31,15 +33,22 @@ sim.rnd = rng(20260830);
 sim.setSlots(slots);
 
 const DT = 1 / 60;
-const SHOTS_AT = [6, 18, 32, 48, 64, 82];    // seconds into the run
+const SHOTS_AT = MODE === 'goal'
+  ? [11.6, 12.3, 12.9, 13.5, 14.1, 14.9, 15.9, 17.2]   // through one scripted move
+  : [6, 18, 32, 48, 64, 82];                            // spread across the match
 const frames: { t: number; men: { x: number; y: number; home: boolean; gk: boolean }[]; b: { x: number; y: number } }[] = [];
 
 const ev = rng(99);
-let nextEvent = 25;
+// in goal mode exactly one event fires, at twelve seconds, so what the pictures
+// show is that single commentary line being played out end to end
+let nextEvent = MODE === 'goal' ? 12 : 25;
 let want = 0;
 for (let n = 0; n * DT < SHOTS_AT[SHOTS_AT.length - 1] + 1; n++) {
   const t = n * DT;
-  if (t > nextEvent) { nextEvent = t + 25 + ev() * 40; sim.event(ev() < 0.5, ev() < 0.4); }
+  if (t > nextEvent) {
+    nextEvent = MODE === 'goal' ? 1e9 : t + 25 + ev() * 40;
+    sim.event(MODE === 'goal' ? true : ev() < 0.5, MODE === 'goal' ? true : ev() < 0.4);
+  }
   const all = sim.step(DT, t, 0.5, false);
   if (want < SHOTS_AT.length && t >= SHOTS_AT[want]) {
     want++;
@@ -68,7 +77,7 @@ const cell = (f: typeof frames[0], ox: number, oy: number) => `
     </g>
     ${f.men.map(m => `<circle cx="${(m.x * W).toFixed(1)}" cy="${(m.y * H).toFixed(1)}" r="${m.gk ? 4 : 5}" fill="${m.home ? '#3b82f6' : '#ef4444'}" stroke="rgba(0,0,0,.5)" stroke-width="1.2"/>`).join('')}
     <circle cx="${(f.b.x * W).toFixed(1)}" cy="${(f.b.y * H).toFixed(1)}" r="4" fill="#fff" stroke="#000" stroke-width="1"/>
-    <text x="4" y="${H + 15}" fill="#cbd5e1" font-family="monospace" font-size="12">t=${f.t.toFixed(0)}s   ball x=${(f.b.x * 100).toFixed(0)}%</text>
+    <text x="4" y="${H + 15}" fill="#cbd5e1" font-family="monospace" font-size="12">t=${f.t.toFixed(1)}s   ball x=${(f.b.x * 100).toFixed(0)}%</text>
   </g>`;
 
 const body = frames.map((f, i) => {

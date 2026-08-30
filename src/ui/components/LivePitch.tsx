@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { LiveState, Side } from '../../game/liveMatch.ts';
 import type { Club } from '../../data/clubs.ts';
 import { formation, fillFormation } from '../../data/formations.ts';
-import { PitchSim } from '../../game/pitchSim.ts';
+import { PitchSim, eventToPlay } from '../../game/pitchSim.ts';
 import type { PitchSlot } from '../../game/pitchSim.ts';
 
 /**
@@ -61,13 +61,19 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
 
       sim.setSlots(slotsRef.current);
 
-      // A goal in the commentary has to be a goal on the pitch, at the right
-      // end, off the man closest to it.
-      if (s.events.length !== seen) {
+      // A goal in the commentary has to be a goal on the pitch, at the right end.
+      //
+      // `seen` is a read cursor into the event list, and only events past it are
+      // ever acted on. It used to be a length, and the search then ran backwards
+      // over the WHOLE history, so any event at all, an ambient line, a booking,
+      // a substitution, re-fired the most recent goal. Score in the ninth minute
+      // and every commentary line for the rest of the match replayed that goal on
+      // the pitch, which is why goals arrived from nowhere with nothing on the
+      // ticker to match them.
+      if (s.events.length > seen) {
+        const fire = eventToPlay(s.events, seen, s.home.id);
         seen = s.events.length;
-        const e = [...s.events].reverse().find(v =>
-          v.type === 'goal' || v.type === 'penalty_goal' || v.type === 'chance' || v.type === 'penalty_miss');
-        if (e) sim.event(e.teamId === s.home.id, e.type === 'goal' || e.type === 'penalty_goal');
+        if (fire) sim.event(fire.home, fire.scored);
       }
 
       const all = sim.step(dt, t, s.possession, off);

@@ -56,10 +56,37 @@ function separate(all: { sl: PitchSlot; p: Pt }[], holder: string | null) {
   }
 }
 
+/** the shape the pitch needs out of a match event, and nothing more */
+export interface PitchEvent { type: string; teamId: string }
+
+/**
+ * Which commentary line, if any, the pitch should act out, given everything
+ * that has landed since `from`.
+ *
+ * Only events past the cursor count. The view used to compare list LENGTHS and
+ * then search the whole history backwards, so an ambient line or a booking, any
+ * event at all, re-fired the last goal: score once and the pitch replayed that
+ * goal every time the ticker moved, with nothing on screen to explain it.
+ *
+ * When several land in one frame the last one wins, because that is the one the
+ * manager is reading.
+ */
+export function eventToPlay(
+  events: readonly PitchEvent[], from: number, homeId: string,
+): { home: boolean; scored: boolean } | null {
+  let fire: { home: boolean; scored: boolean } | null = null;
+  for (let i = Math.max(0, from); i < events.length; i++) {
+    const v = events[i];
+    if (v.type === 'goal' || v.type === 'penalty_goal') fire = { home: v.teamId === homeId, scored: true };
+    else if (v.type === 'chance' || v.type === 'penalty_miss') fire = { home: v.teamId === homeId, scored: false };
+  }
+  return fire;
+}
+
 /** Anything the harness wants to count, written as it happens. */
 export interface PitchTrace {
   onKick?(from: string | null, toId: string | null, tx: number, after: BallAfter): void;
-  onShot?(x: number, after: BallAfter): void;
+  onShot?(fromX: number, after: BallAfter, tx: number, ty: number, home: boolean): void;
   onGoal?(x: number): void;
 }
 
@@ -83,6 +110,7 @@ export class PitchSim {
     // where a goal belongs instead of appearing from the halfway line
     script: null as null | { scored: boolean; home: boolean },
     restartFor: null as null | boolean,   // who kicks off after a goal
+    build: 0,                       // passes left to walk a scripted move up the pitch
     corners: 0,                     // consecutive corners, so one end cannot hog the game
     surge: 0, surgeHome: true,      // bodies into the box for a corner
   };
@@ -108,38 +136,70 @@ export class PitchSim {
   }
 
   /**
-   * Where a shot ends up. Most of the time the move dies at that end and the
-   * ball comes straight back out, which is the whole reason play travels. Two
-   * corners in a row is already a lot, a third is a stuck simulation, so after
-   * that the defence simply heads it clear.
+   * A shot, aimed honestly.
+   *
+   * The ball crosses the goal line between the posts ONLY when it is actually a
+   * goal. Every shot used to fly at the goal line and then turn into a goal kick
+   * or a corner, so the pitch showed the ball beating the keeper and going in,
+   * and no goal being given. A save now stops on the keeper, a miss passes the
+   * line plainly outside the post, a block dies at the defender's feet, and a
+   * deflection leaves at the byline out by the flag.
+   *
+   * The mouth is 0.435..0.565, which is where the posts are actually drawn.
    */
-  private shotOut(): BallAfter {
-    const r = this.rnd();
-    if (this.B.corners >= 2) return r < 0.45 ? 'goalkick' : 'clear';
-    return r < 0.34 ? 'goalkick' : r < 0.55 ? 'corner' : 'clear';
+  private aimShot(home: boolean, from: Pt, scored: boolean): { tx: number; ty: number; sp: number; after: BallAfter } {
+    const rnd = this.rnd;
+    const goal = PitchSim.goalOf(home);
+    const fwd = home ? 1 : -1;
+    const mouth = () => 0.5 + (rnd() - 0.5) * 0.10;      // 0.45..0.55, safely inside the posts
+
+    if (scored) return { tx: goal, ty: mouth(), sp: 1.9, after: 'goal' };
+
+    const r = rnd();
+    if (r < 0.36) {
+      // the keeper gets there. The ball stops on his line, short of the goal.
+      return { tx: goal - fwd * 0.05, ty: mouth(), sp: 1.7, after: 'goalkick' };
+    }
+    if (r < 0.60) {
+      // wide or over: past the line, but nowhere near between the posts
+      const side = rnd() < 0.5 ? -1 : 1;
+      return {
+        tx: goal + fwd * 0.02,
+        ty: clamp(0.5 + side * (0.17 + rnd() * 0.13), 0.09, 0.91),
+        sp: 1.8, after: 'goalkick',
+      };
+    }
+    if (r < 0.76 && this.B.corners < 2) {
+      // deflected out at the byline, out by the corner flag
+      return { tx: goal, ty: rnd() < 0.5 ? 0.07 : 0.93, sp: 1.7, after: 'corner' };
+    }
+    // blocked in front of goal, and headed away
+    const d = Math.abs(goal - from.x);
+    return {
+      tx: from.x + fwd * Math.min(0.09, d * 0.5),
+      ty: clamp(from.y + (rnd() - 0.5) * 0.08, 0.08, 0.92),
+      sp: 1.4, after: 'clear',
+    };
   }
 
   /**
    * The commentary said something happened at one goal, so the pitch plays it
-   * out there: the ball is slid to that side's attacker nearest the goal and he
-   * finishes it. Before this the ball was teleported into the net, so a line
-   * about a striker scoring could land while the ball sat on the halfway line.
+   * out there.
+   *
+   * This arms a move, it does not move the ball. It used to slide the ball
+   * straight to the attacker nearest that goal, which from the keeper's feet
+   * was a single pass across four fifths of the pitch: on screen the keeper
+   * appeared to hit the striker, and the goal appeared out of nothing. Now
+   * act() walks the ball up in ordinary passes and only shoots once it is
+   * actually near the goal, so the caption and the pitch tell the same story.
    */
   event(forHome: boolean, scored: boolean) {
     const B = this.B;
-    const goal = PitchSim.goalOf(forHome);
     B.script = { scored, home: forHome };
+    B.build = 4;                  // passes allowed to get there, then he shoots
     B.surge = 1; B.surgeHome = forHome;
-    let who: PitchSlot | null = null, wp: Pt | null = null, bd = Infinity;
-    for (const sl of this.slots) {
-      if (sl.home !== forHome || sl.i === 0) continue;
-      const q = this.pos.get(sl.id); if (!q) continue;
-      const d = Math.abs(goal - q.x);
-      if (d < bd) { bd = d; who = sl; wp = q; }
-    }
-    // the ball into the box for him, quick but visible, never instant
-    const into = goal + (forHome ? -0.11 : 0.11);
-    this.kick(into, clamp(wp ? wp.y : 0.5, 0.30, 0.70), 2.3, who ? who.id : null);
+    // a beat, so the move starts from the next decision rather than mid flight
+    if (!B.fly) B.until = Math.min(B.until, 0);
   }
 
   /**
@@ -174,10 +234,34 @@ export class PitchSim {
 
     // the commentary said something happened at that goal, so finish it there
     if (B.script) {
-      const sc = B.script; B.script = null;
-      const after: BallAfter = sc.scored ? 'goal' : this.shotOut();
-      this.trace?.onShot?.(PitchSim.goalOf(sc.home), after);
-      this.kick(PitchSim.goalOf(sc.home), clamp(0.5 + (rnd() - 0.5) * 0.30, 0.33, 0.67), 2.1, null, after);
+      const sc = B.script;
+      const goal = PitchSim.goalOf(sc.home);
+      const fwd = sc.home ? 1 : -1;
+      const dist = Math.abs(goal - B.x);
+
+      // Still too far out to shoot. Play it forward to the man of that side who
+      // is furthest on but still a pass away, so the move reads as a move.
+      if (dist > 0.26 && B.build > 0) {
+        B.build--;
+        let best: { sl: PitchSlot; p: Pt } | null = null, bs = -Infinity;
+        for (const a of all) {
+          if (a.sl.home !== sc.home || a.sl.i === 0) continue;
+          const gain = dist - Math.abs(goal - a.p.x);          // + is progress
+          const d = Math.hypot(a.p.x - B.x, a.p.y - B.y);
+          if (gain < 0.02 || d > 0.44) continue;
+          const score = gain * 3 - Math.abs(d - 0.26);
+          if (score > bs) { bs = score; best = a; }
+        }
+        if (best) { this.kick(best.p.x + fwd * 0.02, best.p.y, 1.5, best.sl.id); return; }
+        // nobody showed: drive it forward into space and try again
+        this.kick(B.x + fwd * 0.24, clamp(B.y + (rnd() - 0.5) * 0.16, 0.10, 0.90), 1.5, null);
+        return;
+      }
+
+      B.script = null; B.build = 0;
+      const plan = this.aimShot(sc.home, { x: B.x, y: B.y }, sc.scored);
+      this.trace?.onShot?.(B.x, plan.after, plan.tx, plan.ty, sc.home);
+      this.kick(plan.tx, plan.ty, plan.sp + 0.3, null, plan.after);
       return;
     }
 
@@ -223,7 +307,12 @@ export class PitchSim {
         this.kick(to.p.x, to.p.y, 1.0, to.sl.id);
         return;
       }
-      const long = outs[outs.length - 1];
+      // The long ball goes as far as a keeper can actually kick it, which is
+      // about the halfway line, not to the striker on the edge of the far box.
+      // Picking the most advanced man full stop had him launching it the length
+      // of the pitch to the number nine, over and over.
+      const reach = outs.filter(o => o.d <= 0.52);
+      const long = reach[reach.length - 1] ?? outs[0];
       if (long) { this.kick(long.a.p.x + fwd * 0.02, long.a.p.y, 1.9, long.a.sl.id); return; }
       // truly nobody: up his own flank, and still nowhere near the far goal
       this.kick(me.p.x + fwd * 0.30, me.p.y < 0.5 ? 0.18 : 0.82, 1.4, null);
@@ -239,10 +328,11 @@ export class PitchSim {
       distGoal < 0.30 ? 0.13 * (0.35 + 0.65 * lane) :
       distGoal < 0.40 ? 0.035 * lane : 0;
     if (rnd() < shotChance) {
-      const spread = 0.06 + distGoal * 0.35;       // long range is wilder
-      const after = this.shotOut();
-      this.trace?.onShot?.(me.p.x, after);
-      this.kick(goal, clamp(0.5 + (rnd() - 0.5) * spread * 2, 0.30, 0.70), 1.55, null, after);
+      // open play never scores on its own: goals come from the commentary, so
+      // what the pitch shows here is the shot and what became of it
+      const plan = this.aimShot(home, me.p, false);
+      this.trace?.onShot?.(me.p.x, plan.after, plan.tx, plan.ty, home);
+      this.kick(plan.tx, plan.ty, plan.sp, null, plan.after);
       return;
     }
 
@@ -337,7 +427,7 @@ export class PitchSim {
     B.holder = B.rx; B.rx = null;
     // a man about to finish a scripted goal does not stand on the ball first,
     // so the strike follows the commentary line rather than trailing it
-    B.until = t + (B.script ? 0.16 : 0.35 + rnd() * 0.7);
+    B.until = t + (B.script ? 0.22 : 0.35 + rnd() * 0.7);
     // surge is not cleared here: bodies must still be in the box as a cross lands
   }
 
