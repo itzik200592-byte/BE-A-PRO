@@ -7,7 +7,7 @@ import { asset } from '../asset.ts';
  * per era), and each era change is a hard cut hidden inside a floodlight flash,
  * the classic time jump device, so it reads as years passing rather than a
  * slideshow. Cinemascope bars, grain and a vignette grade the whole thing into
- * one production. About seven seconds, tap anywhere to skip.
+ * one production. About four and a half seconds, tap anywhere to skip.
  */
 
 const SCENES = [
@@ -16,7 +16,7 @@ const SCENES = [
   { src: asset('/intro/scene3.webp'), pos: 'center 42%', kb: 'kb3' },
   { src: asset('/intro/scene4.webp'), pos: 'center 40%', kb: 'kb4' },
 ];
-const HOLD = [1500, 1450, 1550, 2100];   // ms each era is on screen
+const HOLD = [850, 800, 850, 1100];   // ms each era is on screen
 const N = SCENES.length;
 
 const reduceMotion = typeof window !== 'undefined'
@@ -52,9 +52,9 @@ export function IntroCinematic({ onDone }: { onDone: () => void }) {
     for (let n = 1; n < N; n++) {
       t += HOLD[n - 1];
       const cut = t;
-      timers.push(window.setTimeout(() => setFlash(true), cut - 20));
-      timers.push(window.setTimeout(() => setI(n), cut + 120));        // swap under the flash peak
-      timers.push(window.setTimeout(() => setFlash(false), cut + 190));
+      timers.push(window.setTimeout(() => setFlash(true), cut - 15));
+      timers.push(window.setTimeout(() => setI(n), cut + 85));        // swap under the flash peak
+      timers.push(window.setTimeout(() => setFlash(false), cut + 135));
     }
     t += HOLD[N - 1];
     timers.push(window.setTimeout(() => setFadeOut(true), t));
@@ -64,7 +64,7 @@ export function IntroCinematic({ onDone }: { onDone: () => void }) {
   }, [ready]);
 
   const scene = SCENES[i];
-  const kbDur = HOLD[i] + 900;
+  const kbDur = HOLD[i] + 600;
 
   return (
     <div onClick={finish} aria-label="פתיח, הקש לדילוג" style={{
