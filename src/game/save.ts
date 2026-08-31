@@ -80,6 +80,14 @@ export function loadCareer(): GameState | null {
     ...s,
     // the formation arrived after this save format, default the old ones
     tactic: { ...s.tactic, formation: s.tactic?.formation ?? DEFAULT_FORMATION },
+    // Careers saved before the meters were rounded carry values like
+    // 76.36000000000001, so they are cleaned on the way in rather than left to
+    // print themselves at the top of the screen forever.
+    meters: {
+      money: Math.round(s.meters?.money ?? 0),
+      morale: Math.round(s.meters?.morale ?? 65),
+      prestige: Math.round(s.meters?.prestige ?? 30),
+    },
     chronicle: s.chronicle ?? [],
     chronicleSeen: s.chronicleSeen ?? 0,
     inbox: s.inbox ?? [],

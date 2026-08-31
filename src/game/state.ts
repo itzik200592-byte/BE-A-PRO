@@ -284,6 +284,17 @@ export function transferWindow(gs: GameState) {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+/**
+ * The three meters the manager reads are whole numbers, always.
+ *
+ * Morale drifted fractional because the coach's motivation is worth a fraction
+ * of a point per match (coachMoraleBias), and 70 + 6 + 0.36 was stored and then
+ * printed as 76.36000000000001. Anything shown as a number is rounded where it
+ * is STORED, not where it is drawn, so it cannot come back somewhere else.
+ */
+const meter = (v: number) => Math.round(clamp(v, 0, 100));
+const cash = (v: number) => Math.round(v);
+
 /* ------------------------------------------------------------- onboarding */
 
 /** Your name, the first thing the chairman asks for. */
@@ -352,9 +363,9 @@ export function afterSigning(gs: GameState, effect: { morale?: number; prestige?
   return {
     ...gs,
     meters: {
-      money: gs.meters.money,
-      morale: clamp(gs.meters.morale + (effect.morale ?? 0), 0, 100),
-      prestige: clamp(gs.meters.prestige + (effect.prestige ?? 0), 0, 100),
+      money: cash(gs.meters.money),
+      morale: meter(gs.meters.morale + (effect.morale ?? 0)),
+      prestige: meter(gs.meters.prestige + (effect.prestige ?? 0)),
     },
     style: scoreStyle(gs.style, effect),
     phase: 'squad',
@@ -411,7 +422,7 @@ export function takeCourse(gs: GameState): GameState {
   if (!l || courseBlockedReason(gs)) return gs;
   return {
     ...gs,
-    meters: { ...gs.meters, money: gs.meters.money - l.cost },
+    meters: { ...gs.meters, money: cash(gs.meters.money - l.cost) },
     coach: applyCourse(gs.coach, l.id),
     pendingOutcome: `סיימת את ${l.course}. מהיום אתה ${l.name}.`,
   };
@@ -570,7 +581,7 @@ export function resolveDeparture(gs: GameState, kind: 'star' | 'young', optionIn
       const next = removePlayer(gs, p.id);
       return {
         ...next, preResolved: resolved,
-        meters: { ...gs.meters, money: gs.meters.money + fee, morale: clamp(gs.meters.morale + 2, 0, 100) },
+        meters: { ...gs.meters, money: cash(gs.meters.money + fee), morale: meter(gs.meters.morale + 2) },
         style: scoreStyle(gs.style, { money: fee, morale: 2 }),
         pendingOutcome: `${p.name} נמכר תמורת ${formatK(fee)}. הכסף בקופה, אבל הסגל איבד את השחקן הכי טוב שלו.`,
       };
@@ -578,7 +589,7 @@ export function resolveDeparture(gs: GameState, kind: 'star' | 'young', optionIn
     // block the move: he stays, the dressing room grumbles
     return {
       ...gs, preResolved: resolved,
-      meters: { ...gs.meters, morale: clamp(gs.meters.morale - 5, 0, 100) },
+      meters: { ...gs.meters, morale: meter(gs.meters.morale - 5) },
       style: scoreStyle(gs.style, { morale: -5, prestige: 1 }),
       pendingOutcome: `אמרת לא. ${p.name} נשאר, אבל הוא לא מרוצה והחדר הרגיש את זה.`,
     };
@@ -593,7 +604,7 @@ export function resolveDeparture(gs: GameState, kind: 'star' | 'young', optionIn
     const contracts = { ...gs.contracts, [p.id]: 3 };
     return {
       ...gs, preResolved: resolved, contracts,
-      meters: { ...gs.meters, money: Math.max(0, gs.meters.money - bonus), morale: clamp(gs.meters.morale + 4, 0, 100) },
+      meters: { ...gs.meters, money: cash(Math.max(0, gs.meters.money - bonus)), morale: meter(gs.meters.morale + 4) },
       style: scoreStyle(gs.style, { money: -bonus, morale: 4 }),
       pendingOutcome: `${p.name} חתם חוזה חדש ומחייך. ${formatK(bonus)} מהקופה, אבל הכישרון נשאר בבית לשלוש שנים.`,
     };
@@ -604,7 +615,7 @@ export function resolveDeparture(gs: GameState, kind: 'star' | 'young', optionIn
   return {
     ...gs, preResolved: resolved,
     contracts: { ...gs.contracts, [p.id]: kept },
-    meters: { ...gs.meters, morale: clamp(gs.meters.morale - 4, 0, 100) },
+    meters: { ...gs.meters, morale: meter(gs.meters.morale - 4) },
     style: scoreStyle(gs.style, { money: 1, morale: -4 }),
     pendingOutcome: `סירבת להעלאה. ${p.name} בלע את זה, אבל הפעם הבאה שהחוזה שלו ייגמר, הוא כבר לא יבקש יפה.`,
   };
@@ -878,7 +889,7 @@ export function signPlayer(gs: GameState, playerId: string): GameState {
   const next = writeSquad(gs, { starters: sq.starters, bench: [...sq.bench, fa.player] });
   return {
     ...next,
-    meters: { ...gs.meters, money: gs.meters.money - fa.fee },
+    meters: { ...gs.meters, money: cash(gs.meters.money - fa.fee) },
     market: gs.market.filter(f => f.player.id !== playerId),
     contracts: { ...gs.contracts, [fa.player.id]: contractTerms(fa, club(gs).tier).years },
   };
@@ -899,7 +910,7 @@ export function sellPlayer(gs: GameState, playerId: string): GameState {
   const next = writeSquad(gs, { starters: sq.starters, bench: sq.bench.filter(x => x.id !== playerId) });
   return {
     ...next,
-    meters: { ...gs.meters, money: gs.meters.money + sellPrice(p, club(gs).tier) },
+    meters: { ...gs.meters, money: cash(gs.meters.money + sellPrice(p, club(gs).tier)) },
   };
 }
 
@@ -995,7 +1006,7 @@ export function sellPull(gs: GameState): GameState {
   return {
     ...gs,
     pull: null,
-    meters: { ...gs.meters, money: gs.meters.money + pull.cashValue },
+    meters: { ...gs.meters, money: cash(gs.meters.money + pull.cashValue) },
   };
 }
 
@@ -1313,7 +1324,7 @@ function dilemmaCtx(gs: GameState, star: string, rivalShort: string, rivalId: st
   const pos = Math.max(1, table.findIndex(t => t.clubId === gs.clubId) + 1);
 
   return {
-    star, rival: rivalShort, club: club(gs).short, money: gs.meters.money,
+    star, rival: rivalShort, club: club(gs).short, money: cash(gs.meters.money),
     benched: forgotten && apps(forgotten) <= 1 ? surname(forgotten.name) : '',
     benchedApps: forgotten ? apps(forgotten) : 0,
     youngster: kid ? surname(kid.name) : '',
@@ -1371,9 +1382,9 @@ export function chooseDilemma(gs: GameState, optionIndex: number): GameState {
   return {
     ...gs,
     meters: {
-      money: gs.meters.money + (e.money ?? 0),
-      morale: clamp(gs.meters.morale + (e.morale ?? 0), 0, 100),
-      prestige: clamp(gs.meters.prestige + (e.prestige ?? 0), 0, 100),
+      money: cash(gs.meters.money + (e.money ?? 0)),
+      morale: meter(gs.meters.morale + (e.morale ?? 0)),
+      prestige: meter(gs.meters.prestige + (e.prestige ?? 0)),
     },
     pendingOutcome: opt.outcome,
     style: scoreStyle(gs.style, e),
@@ -1406,9 +1417,9 @@ export function answerInbox(gs: GameState, itemIndex: number, optionIndex: numbe
   return {
     ...gs,
     meters: {
-      money: gs.meters.money + (e.money ?? 0),
-      morale: clamp(gs.meters.morale + (e.morale ?? 0), 0, 100),
-      prestige: clamp(gs.meters.prestige + (e.prestige ?? 0), 0, 100),
+      money: cash(gs.meters.money + (e.money ?? 0)),
+      morale: meter(gs.meters.morale + (e.morale ?? 0)),
+      prestige: meter(gs.meters.prestige + (e.prestige ?? 0)),
     },
     pendingOutcome: opt.outcome,
     style: scoreStyle(gs.style, e),
@@ -1557,9 +1568,9 @@ export function commitRound(gs: GameState, playerResult: MatchResult): GameState
     phase: 'result',
     lastLedger: { prize, gate, ...costs, net: prize + gate - costs.total },
     meters: {
-      money: Math.max(0, gs.meters.money + prize + gate - costs.total),
-      morale: clamp(gs.meters.morale + moraleDelta, 0, 100),
-      prestige: clamp(gs.meters.prestige + (won ? 2 : draw ? 0 : -1), 0, 100),
+      money: cash(Math.max(0, gs.meters.money + prize + gate - costs.total)),
+      morale: meter(gs.meters.morale + moraleDelta),
+      prestige: meter(gs.meters.prestige + (won ? 2 : draw ? 0 : -1)),
     },
     league: { ...gs.league, table },
     stadium: built.stadium,
@@ -1615,9 +1626,9 @@ export function answerPress(gs: GameState, index: number): GameState {
   const ans = q?.answers[index];
   const meters = ans
     ? {
-        money: gs.meters.money,
-        morale: clamp(gs.meters.morale + (ans.effect.morale ?? 0), 0, 100),
-        prestige: clamp(gs.meters.prestige + (ans.effect.prestige ?? 0), 0, 100),
+        money: cash(gs.meters.money),
+        morale: meter(gs.meters.morale + (ans.effect.morale ?? 0)),
+        prestige: meter(gs.meters.prestige + (ans.effect.prestige ?? 0)),
       }
     : gs.meters;
   return advancePastPress({ ...gs, meters, style: ans ? scoreStyle(gs.style, ans.effect) : gs.style });
@@ -1850,8 +1861,8 @@ export function startNextSeason(gs: GameState): GameState {
     meters: {
       // prize money in, a full season of wages out
       money: Math.max(0, rawMoney),
-      morale: clamp(gs.meters.morale + moraleDelta, 0, 100),
-      prestige: clamp(gs.meters.prestige + prestigeDelta - (brokeIt ? 4 : 0), 0, 100),
+      morale: meter(gs.meters.morale + moraleDelta),
+      prestige: meter(gs.meters.prestige + prestigeDelta - (brokeIt ? 4 : 0)),
     },
     seasonStats: {},
     careerStats,

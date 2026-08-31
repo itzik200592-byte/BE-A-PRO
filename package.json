@@ -11,7 +11,8 @@
     "check:pitch": "node --experimental-strip-types scripts/pitch-check.mts",
     "check:formations": "node --experimental-strip-types scripts/formation-check.mts",
     "check:sync": "node --experimental-strip-types scripts/pitch-sync.mts",
-    "check:goals": "node --experimental-strip-types scripts/goal-origin.mts"
+    "check:goals": "node --experimental-strip-types scripts/goal-origin.mts",
+    "check:numbers": "node --experimental-strip-types scripts/whole-numbers.mts"
   },
   "dependencies": {
     "react": "^18.3.1",
