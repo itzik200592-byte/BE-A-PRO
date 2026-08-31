@@ -9,6 +9,10 @@ import type { LeagueState, Fixture } from './league.ts';
 import { initLeague, applyResult, sortedTable, buildFixtures, emptyTable } from './league.ts';
 import { LEAGUE_C, isDerby, LEAGUE_NAMES, setDerbies, derbiesFromClubs } from '../data/clubs.ts';
 import { buildRegionLeague } from '../data/cities.ts';
+import { debtState, debtLine } from './finance.ts';
+import type { DebtState } from './finance.ts';
+export { debtLine };
+export type { DebtState };
 import { DEFAULT_FORMATION, formationForClub } from '../data/formations.ts';
 import type { FormationId } from '../data/formations.ts';
 import { TEMPLATES, eligible, rollDilemma } from '../data/dilemmas.ts';
@@ -51,11 +55,24 @@ export type Phase =
   | 'onboard-archetype' | 'onboard-manager' | 'onboard-club' | 'signing' | 'squad' | 'hub' | 'transfers'
   | 'dilemma' | 'tactic' | 'vs' | 'match' | 'result' | 'press' | 'season-end' | 'chronicle'
   | 'captain' | 'assistant' | 'coach' | 'preseason' | 'preseason-market' | 'inbox' | 'chat' | 'table' | 'stadium'
-  | 'packs';
+  | 'packs' | 'sacked';
 
 export type MarketLine = 'gk' | 'def' | 'mid' | 'atk';
 
 export interface Meters { money: number; morale: number; prestige: number; }
+
+/** The day it ended, kept so the letter can say what actually happened. */
+export interface Sacking {
+  reason: 'debt';
+  debt: number;
+  limit: number;
+  week: number;
+  season: number;
+  league: string;
+  club: string;
+  position: number;
+  teams: number;
+}
 
 /** The home ground and any expansion currently under construction. */
 export interface StadiumProject { label: string; addSeats: number; roundsLeft: number; total: number; }
@@ -149,6 +166,8 @@ export interface GameState {
   lastPlayerMatch: MatchResult | null;
   lastRound: RoundResult[];
   press: { outlet: Outlet; q: PressQuestion } | null;
+  /** set the moment the owner ends it, and never cleared: the career is over */
+  sacking: Sacking | null;
   style: ManagerStyle;
   /** per player season record for the whole division, drives the charts */
   seasonStats: Record<string, PlayerSeason>;
@@ -207,7 +226,7 @@ export const ASSISTANT_LEAVES_TIER = 3;   // ליגה א'
 
 const ASSISTANT_NAMES = ['שוקי', 'בוזי', 'ג׳קי', 'מוטי', 'ציון', 'פפו'];
 
-export const START_MONEY = 75_000;
+export const START_MONEY = 180_000;
 
 /** Manager age changes how the dressing room and the boardroom treat you. */
 export function ageProfile(age: number) {
@@ -238,6 +257,7 @@ export function newGame(seed = 12345): GameState {
     lastPlayerMatch: null,
     lastRound: [],
     press: null,
+    sacking: null,
     style: { players: 0, media: 0, money: 0 },
     seasonStats: {},
     careerStats: {},
@@ -769,6 +789,11 @@ export function seasonGoal(gs: GameState): SeasonGoal {
   return { pos, teams, pts: me.pts, played: me.played, left, zone, target, line, blocked, up, down };
 }
 
+/** The books as the owner sees them, and how close he is to acting. */
+export function debt(gs: GameState): DebtState {
+  return debtState(gs.meters.money, club(gs).tier);
+}
+
 /** The promotion gate: what the division above wants, and whether we meet it. */
 export function stadiumGate(gs: GameState): { nextTier: number; need: number; meets: boolean } | null {
   const t = club(gs).tier;
@@ -896,7 +921,9 @@ export function signPlayer(gs: GameState, playerId: string): GameState {
 }
 
 export function sellBlockedReason(gs: GameState): string | null {
-  if (!transferWindow(gs).open) return 'החלון סגור';
+  // A club in the red is always allowed to sell. Without this the owner could
+  // sack you for a debt you had no way to pay off, which is a trap, not pressure.
+  if (!transferWindow(gs).open && debt(gs).level === 'clear') return 'החלון סגור';
   if (squadSize(gs) <= MIN_SQUAD) return `אי אפשר לרדת מתחת ל-${MIN_SQUAD} שחקנים`;
   return null;
 }
@@ -1568,7 +1595,7 @@ export function commitRound(gs: GameState, playerResult: MatchResult): GameState
     phase: 'result',
     lastLedger: { prize, gate, ...costs, net: prize + gate - costs.total },
     meters: {
-      money: cash(Math.max(0, gs.meters.money + prize + gate - costs.total)),
+      money: cash(gs.meters.money + prize + gate - costs.total),
       morale: meter(gs.meters.morale + moraleDelta),
       prestige: meter(gs.meters.prestige + (won ? 2 : draw ? 0 : -1)),
     },
@@ -1584,12 +1611,48 @@ export function commitRound(gs: GameState, playerResult: MatchResult): GameState
 
   const newEntries = chronicleAfterRound(gs, nextBase, playerResult);
   const extra = built.done ? [built.done, ...newEntries] : newEntries;
-  return extra.length ? { ...nextBase, chronicle: [...nextBase.chronicle, ...extra] } : nextBase;
+  const withChron = extra.length ? { ...nextBase, chronicle: [...nextBase.chronicle, ...extra] } : nextBase;
+  return checkTheBooks(withChron);
+}
+
+/**
+ * The owner reads the ledger the moment the round is settled. Past the line
+ * there is no appeal and no waiting for the season to end: the result screen
+ * still shows, and the letter is waiting behind it.
+ */
+function checkTheBooks(gs: GameState): GameState {
+  if (gs.sacking) return gs;
+  const d = debt(gs);
+  if (d.level !== 'sacked') return gs;
+  const c = club(gs);
+  const table = sortedTable(gs.league);
+  const sacking: Sacking = {
+    reason: 'debt', debt: d.debt, limit: d.limit,
+    week: gs.week, season: gs.season,
+    league: LEAGUE_NAMES[c.tier], club: c.name,
+    position: Math.max(1, table.findIndex(x => x.clubId === gs.clubId) + 1),
+    teams: table.length,
+  };
+  return {
+    ...gs,
+    sacking,
+    chronicle: [...gs.chronicle, {
+      id: `sacked-s${gs.season}`,
+      kind: 'sacked' as const,
+      week: gs.week,
+      title: 'פוטרת',
+      body: `${debtLine(d)} מקום ${sacking.position} מתוך ${sacking.teams} ב${sacking.league}, ושם זה נגמר.`,
+      icon: 'alert' as const,
+      tint: 'loss' as const,
+    }],
+  };
 }
 
 /** From the result screen, the reporter is waiting outside. */
 export function continueFromResult(gs: GameState): GameState {
   gs = { ...gs, stadiumReveal: null };   // the unveil has had its moment
+  // no press room, no next week: the owner is waiting
+  if (gs.sacking) return { ...gs, phase: 'sacked', press: null, chat: null };
   const r = gs.lastPlayerMatch;
   const fx = playerFixture(gs);
   if (!r || !fx) return advancePastPress(gs);

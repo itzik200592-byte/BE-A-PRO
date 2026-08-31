@@ -15,6 +15,7 @@ import { isDerby } from '../data/clubs.ts';
 import type { IconName } from '../ui/components/Icon.tsx';
 
 export type ChronicleKind =
+  | 'sacked'
   | 'first_win'
   | 'first_loss'
   | 'big_win'
@@ -39,7 +40,8 @@ export interface ChronicleEntry {
 const tint = (kind: ChronicleKind): ChronicleEntry['tint'] => {
   switch (kind) {
     case 'first_loss':
-    case 'derby_loss': return 'loss';
+    case 'derby_loss':
+    case 'sacked': return 'loss';
     case 'streak_broken':
     case 'top_of_table':
     case 'youngster_scored': return 'gold';
@@ -60,6 +62,7 @@ const icon = (kind: ChronicleKind): IconName => {
     case 'streak_broken': return 'target';
     case 'youngster_scored': return 'boot';
     case 'season_end': return 'trophy';
+    case 'sacked': return 'alert';
   }
 };
 

@@ -48,6 +48,7 @@ export function Hub({ gs, onStart, onSquad, onTransfers, onChronicle, onCaptain,
   const win = G.transferWindow(gs);
   const gate = G.stadiumGate(gs);
   const cheapest = Math.min(...PACKS.map(p => p.cost));
+  const books = G.debt(gs);
   const hero = useRef<HTMLDivElement>(null);
 
   return (
@@ -71,6 +72,8 @@ export function Hub({ gs, onStart, onSquad, onTransfers, onChronicle, onCaptain,
         <div ref={hero}>
           <MatchHero club={c} rival={rival} iAmHome={!!iAmHome} derby={derby} gs={gs} onStart={onStart} />
         </div>
+
+        {books.level !== 'clear' && <DebtStrip d={books} onClick={onTransfers} />}
 
         {gs.inbox.length > 0 && <InboxStrip count={gs.inbox.length} onClick={onInbox} />}
 
@@ -222,6 +225,29 @@ function Cell({ i, icon, glyph, label, onClick, dot, badge, count }: {
       </span>
       <span className="hub-cell-label">{label}</span>
       {count !== undefined && <span className="hub-cell-count num">{count}</span>}
+    </button>
+  );
+}
+
+/**
+ * The books, when they are in the red. It sits directly under the match, above
+ * everything else, and it says the number out loud, because a manager should
+ * never be sacked by a figure he had not seen. Tapping it goes to the market,
+ * which is the only way out.
+ */
+function DebtStrip({ d, onClick }: { d: G.DebtState; onClick: () => void }) {
+  const hot = d.level === 'final';
+  const tone = hot ? 'var(--loss)' : d.level === 'warned' ? 'var(--gold)' : 'var(--ink-dim)';
+  return (
+    <button className="debt-strip" style={{ '--tone': tone } as React.CSSProperties} onClick={onClick}>
+      <div className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
+        <span className="label-cap">הבעלים והספרים</span>
+        <span className="debt-num num">−₪{Math.round(d.debt).toLocaleString('en-US')}</span>
+      </div>
+      <div className="debt-bar" aria-hidden="true">
+        <span style={{ width: `${Math.min(100, d.ratio * 100)}%` }} />
+      </div>
+      <div className="debt-line">{G.debtLine(d)}</div>
     </button>
   );
 }

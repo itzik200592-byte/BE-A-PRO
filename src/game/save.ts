@@ -35,6 +35,9 @@ export interface SaveSummary {
 export function saveCareer(state: GameState): void {
   // do not persist half finished onboarding, there is nothing to return to
   if (!state.clubId || state.phase === 'onboard-archetype' || state.phase === 'onboard-manager' || state.phase === 'onboard-club') return;
+  // a sacked manager has no career to come back to, so it is wiped rather than
+  // left on the title screen offering to continue into a dead end
+  if (state.sacking) { try { localStorage.removeItem(KEY); } catch { /* ignore */ } return; }
   try {
     const env: Envelope = { version: VERSION, savedAt: Date.now(), state };
     localStorage.setItem(KEY, JSON.stringify(env));

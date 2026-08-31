@@ -262,7 +262,7 @@ export function seasonPurse(tier: number, position: number, teams: number, promo
   // recalibrated down for the weekly-wage economy. Wages are now the dominant,
   // fixed cost, so income is a participation purse that a bad season cannot
   // cover on its own, forcing you to actually run the club.
-  const base = [0, 90_000, 240_000, 700_000, 1_800_000, 4_500_000][Math.min(tier, TOP_TIER)];
+  const base = [0, 150_000, 200_000, 930_000, 1_800_000, 4_500_000][Math.min(tier, TOP_TIER)];
   const share = 1 + (teams - position) * 0.12;   // finishing higher pays more
   // going up brings sponsors and television money, which is what funds the
   // rebuild you now urgently need for a division that is a level above you
@@ -290,9 +290,9 @@ export function matchPrize(tier: number, result: 'W' | 'D' | 'L'): number {
  *   לאומית    12–15K
  *   על        25–100K, the star tax
  */
-const WAGE_BAND: Record<number, [number, number]> = {
-  1: [500, 5_000],
-  2: [1_000, 5_000],
+export const WAGE_BAND: Record<number, [number, number]> = {
+  1: [200, 5_000],
+  2: [400, 5_000],
   3: [7_000, 12_000],
   4: [12_000, 15_000],
   5: [25_000, 100_000],
@@ -305,7 +305,7 @@ export function playerWage(p: Player, tier: number): number {
   // where he sits in the division's rating span, 0 (fringe) .. 1 (star)
   const frac = Math.max(0, Math.min(1, (overall(p) - (ceiling - 10)) / 18));
   // eased so most of a squad sits low and only the best spike, hardest at the top
-  const eased = Math.pow(frac, t >= 4 ? 2 : 1.4);
+  const eased = Math.pow(frac, t <= 2 ? 2.8 : t >= 4 ? 2 : 1.4);
   return Math.round((lo + (hi - lo) * eased) / 100) * 100;
 }
 

@@ -728,3 +728,25 @@ input{font-family:inherit;}
 .feed-filter{position:relative;}
 .feed-filter button{position:relative; touch-action:manipulation;}
 .feed-filter button::after{content:""; position:absolute; inset:-7px -3px;}
+
+/* ---- the owner reading the books. Only ever on screen when in the red. */
+.debt-strip{
+  display:block; width:100%; text-align:start; cursor:pointer;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--tone) 11%,var(--surface-2)),var(--surface));
+  border:1px solid color-mix(in srgb,var(--tone) 38%,transparent);
+  border-radius:var(--plate); padding:11px 13px 12px;
+  transition:transform var(--t-fast) var(--ease-out);
+}
+.debt-strip:active{transform:scale(.985)}
+.debt-num{font-family:var(--font-display); font-size:17px; color:var(--tone);}
+.debt-bar{height:5px; border-radius:3px; background:rgba(255,255,255,.09); margin:9px 0 8px; overflow:hidden;}
+.debt-bar span{display:block; height:100%; background:var(--tone); border-radius:3px;
+  transition:width var(--t-slow) var(--ease-out);}
+.debt-line{font-size:13px; line-height:1.5; color:var(--ink-dim); font-weight:600;}
+
+/* ---- the letter */
+.sack-head{text-align:center;}
+.sack-owner{width:104px; height:104px; border-radius:50%; object-fit:cover; margin:0 auto 14px;
+  display:block; filter:grayscale(.5) brightness(.85); border:1px solid var(--line-2);}
+.sack-figs{display:flex; gap:10px; background:var(--surface); border:1px solid var(--line);
+  border-radius:var(--plate-sm); padding:13px 10px;}

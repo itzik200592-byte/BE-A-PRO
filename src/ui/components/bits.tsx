@@ -88,7 +88,11 @@ export function StatBox({ label, value, color }: { label: string; value: string;
 }
 
 export function formatMoney(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `₪${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 1000) return `₪${Math.round(n / 1000)}K`;
-  return `₪${n}`;
+  // the sign belongs in front of the currency, not between it and the digits:
+  // a purse in the red read as "₪-95K", which is not how anyone writes money
+  const sign = n < 0 ? '-' : '';
+  const v = Math.abs(n);
+  if (v >= 1_000_000) return `${sign}₪${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1000) return `${sign}₪${Math.round(v / 1000)}K`;
+  return `${sign}₪${v}`;
 }
