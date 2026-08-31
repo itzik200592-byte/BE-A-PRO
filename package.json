@@ -10,7 +10,8 @@
     "sim": "node --experimental-strip-types src/engine/sanity.ts",
     "check:pitch": "node --experimental-strip-types scripts/pitch-check.mts",
     "check:formations": "node --experimental-strip-types scripts/formation-check.mts",
-    "check:sync": "node --experimental-strip-types scripts/pitch-sync.mts"
+    "check:sync": "node --experimental-strip-types scripts/pitch-sync.mts",
+    "check:goals": "node --experimental-strip-types scripts/goal-origin.mts"
   },
   "dependencies": {
     "react": "^18.3.1",

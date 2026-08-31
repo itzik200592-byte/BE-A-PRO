@@ -65,6 +65,13 @@ export interface Moment {
   shooterId?: string;
   shooterName?: string;
   keeperDir?: Corner;
+  /**
+   * How good the chance actually was, 0..1. Every outcome is scaled by it, so a
+   * scruffy half chance and a golden one no longer convert identically. Without
+   * this the thresholds could not be lowered without inflating the scoreline,
+   * because a rubbish chance handed over as a decision paid out like a clear one.
+   */
+  q?: number;
   options?: MomentOption[];
 }
 
@@ -269,6 +276,41 @@ function commentGoal(st: LiveState, scorer: string): string {
   return lines[Math.floor(rand(st) * lines.length)];
 }
 
+/**
+ * The line above which a chance becomes YOUR call.
+ *
+ * Itzik's rule, and the one the whole match now obeys: a goal never happens
+ * without the manager having made a decision. So anything that could possibly
+ * end in the net is handed over, and anything below these lines can never score
+ * at all, it is a half chance that goes wide or is claimed, and it exists to
+ * give the ticker and the pitch something to say.
+ *
+ * Lower thresholds mean more calls and more goals, so these two numbers are
+ * what the scoreline is tuned on. scripts/goal-origin.mts is the check.
+ */
+const ATT_MOMENT = 0.13;    // your attack becomes a decision above this
+const DEF_MOMENT = 0.13;    // their attack becomes a decision above this
+
+/**
+ * What the chance was worth, as a multiplier on whatever the decision pays out.
+ * Calibrated so a chance at the old handover line (about 0.36) is worth roughly
+ * what it always was, and everything scruffier than that is worth less.
+ */
+function edge(q: number | undefined): number {
+  return Math.max(0.42, Math.min(1.55, 0.42 + (q ?? 0.36) * 1.55));
+}
+
+/** Half chances, which never score. Flavour, so the match still breathes. */
+const NEAR_MISS = [
+  (n: string) => `${n} מנסה מרחוק, הכדור חולף מעל המשקוף`,
+  (n: string) => `${n} בעט, השוער קופץ ומרחיק`,
+  (n: string) => `${n} מצא רגע, אבל הבלם נשכב על הכדור`,
+  (n: string) => `${n} מסובב אחת, יוצא מעט לצד`,
+];
+function nearMiss(st: LiveState, name: string): string {
+  return NEAR_MISS[Math.floor(rand(st) * NEAR_MISS.length)](name);
+}
+
 /** A defender by preference, for the tackle moment. */
 function pickDefender(s: Side): Player {
   return s.onPitch.find(p => p.position === 'CB')
@@ -295,13 +337,14 @@ function oppChance(st: LiveState, possNorm: number) {
   const idx = sideIndex(st, atk);
   st.shots[idx]++; st.xg[idx] += q;
 
-  // a dangerous chance, most of the time, becomes a moment you have to solve
-  if (q > 0.4 && rand(st) < 0.72) {
+  // A dangerous chance is ALWAYS yours to defend. It used to slip past you 28%
+  // of the time and settle itself, which is a goal conceded with nobody asked.
+  if (q > DEF_MOMENT) {
     st.phase = 'moment';
     if (rand(st) < 0.5) {
       const gk = def.onPitch.find(p => p.position === 'GK');
       st.pending = {
-        kind: 'def_keeper', minute: st.minute, shooterId: striker.id, shooterName: striker.name,
+        kind: 'def_keeper', minute: st.minute, q, shooterId: striker.id, shooterName: striker.name,
         title: 'הם לבד מול השוער!', subtitle: `${striker.name} בורח אל ${gk?.name ?? 'השוער שלך'}`,
         options: [
           { id: 'rush', label: 'לצאת אליו', hint: 'מצמצם זווית, מנצח סיומת אבל חשוף לעיגול' },
@@ -311,7 +354,7 @@ function oppChance(st: LiveState, possNorm: number) {
     } else {
       const cb = pickDefender(def);
       st.pending = {
-        kind: 'def_tackle', minute: st.minute, shooterId: striker.id, shooterName: striker.name,
+        kind: 'def_tackle', minute: st.minute, q, shooterId: striker.id, shooterName: striker.name,
         title: 'חדירה מסוכנת!', subtitle: `${striker.name} משתחרר מול ${cb.name}`,
         options: [
           { id: 'slide', label: 'גליץ׳', hint: 'אם תזכה בכדור מושלם, אם תפספס עבירה או שהם בפנים' },
@@ -322,13 +365,14 @@ function oppChance(st: LiveState, possNorm: number) {
     return;
   }
 
-  // otherwise resolve on its own
-  const pGoal = Math.max(0.02, Math.min(0.92, q * Math.pow(striker.attrs.shooting / 75, 0.55) / Math.pow(keeperOvr(def) / 75, 0.6)));
-  if (rand(st) < pGoal) {
-    st.score[idx]++;
-    st.events.push({ minute: st.minute, type: 'goal', teamId: atk.id, playerId: striker.id, playerName: striker.name, text: commentGoal(st, striker.name), big: true });
-  } else if (q > 0.4) {
-    st.events.push({ minute: st.minute, type: 'chance', teamId: atk.id, playerName: striker.name, text: `${striker.name} מנסה, ${keeperName(def)} מרחיק לקרן` });
+  // Below the line it is a half chance and it CANNOT score. It gets a line on
+  // the ticker so the match still breathes, and the pitch acts it out, but the
+  // scoreboard never moves without you.
+  if (q > 0.05 && rand(st) < 0.72) {
+    st.events.push({
+      minute: st.minute, type: 'chance', teamId: atk.id, playerName: striker.name,
+      text: rand(st) < 0.5 ? nearMiss(st, striker.name) : `${striker.name} מנסה, ${keeperName(def)} מרחיק לקרן`,
+    });
   }
 }
 
@@ -371,7 +415,7 @@ function playerChance(st: LiveState) {
     // one on one, a real decision
     st.phase = 'moment';
     st.pending = {
-      kind: 'one_on_one', minute: st.minute, shooterId: shooter.id, shooterName: shooter.name,
+      kind: 'one_on_one', minute: st.minute, q, shooterId: shooter.id, shooterName: shooter.name,
       title: 'אחד על אחד!', subtitle: `${shooter.name} מול השוער לבד`,
       options: [
         { id: 'dribble', label: 'לעבור את השוער', hint: 'דורש כדרור, אבל אז השער ריק מולו' },
@@ -380,21 +424,24 @@ function playerChance(st: LiveState) {
     };
     return;
   }
-  if (q > 0.36) {
+  if (q > ATT_MOMENT) {
     // clear chance, pick your corner
     st.phase = 'moment';
     st.pending = {
-      kind: 'shot', minute: st.minute, shooterId: shooter.id, shooterName: shooter.name,
+      kind: 'shot', minute: st.minute, q, shooterId: shooter.id, shooterName: shooter.name,
       keeperDir: keeperDir(st), title: 'הזדמנות!', subtitle: `${shooter.name} משתחרר לבעיטה`,
     };
     return;
   }
 
-  // small chance, resolve without bothering the player
-  const pGoal = Math.max(0.02, Math.min(0.92, q * Math.pow(shooter.attrs.shooting / 75, 0.55) / Math.pow(keeperOvr(def) / 75, 0.6)));
-  if (rand(st) < pGoal) {
-    st.score[idx]++;
-    st.events.push({ minute: st.minute, type: 'goal', teamId: atk.id, playerId: shooter.id, playerName: shooter.name, text: commentGoal(st, shooter.name), big: true });
+  // A half chance, and it CANNOT score. This is where goals used to appear out
+  // of a quiet minute with nothing asked of you, which is the one thing a
+  // manager should never see.
+  if (q > 0.05 && rand(st) < 0.72) {
+    st.events.push({
+      minute: st.minute, type: 'chance', teamId: atk.id, playerName: shooter.name,
+      text: nearMiss(st, shooter.name),
+    });
   }
 }
 
@@ -570,9 +617,10 @@ export function resolveDefKeeper(st: LiveState, optionId: string): DefKeeperOutc
   // rushing narrows the angle, superb against a finisher but exposed to a dribble;
   // staying keeps you set for a shot but a clever striker rounds you
   const save = isRush
-    ? 0.62 + (gkq - 60) / 200 - (dribbling - 60) / 150
-    : 0.44 + (gkq - 60) / 200 - (shooting - 60) / 190;
-  const p = Math.max(0.12, Math.min(0.9, save));
+    ? 0.48 + (gkq - 60) / 200 - (dribbling - 60) / 150
+    : 0.34 + (gkq - 60) / 200 - (shooting - 60) / 190;
+  // the better the chance they got into, the less the keeper can do about it
+  const p = Math.max(0.10, Math.min(0.94, save / edge(m.q)));
   const saved = rand(st) < p;
 
   if (saved) {
@@ -599,12 +647,12 @@ export function resolveDefTackle(st: LiveState, optionId: string): DefTackleOutc
   let outcome: DefTackleOutcome;
 
   if (optionId === 'slide') {
-    const win = Math.max(0.15, Math.min(0.85, 0.5 + (defending - 60) / 150 - (dribbling - 60) / 150));
+    const win = Math.max(0.15, Math.min(0.85, 0.44 + (defending - 60) / 150 - (dribbling - 60) / 150));
     if (rand(st) < win) {
       st.events.push({ minute: st.minute, type: 'chance', teamId: playerSide(st).id, playerName: cb.name,
         text: `${cb.name} עם גליץ׳ מושלם, מנקה את הכדור לקרן!` });
       outcome = 'slide-clear';
-    } else if (rand(st) < 0.42) {
+    } else if (rand(st) < 0.28) {
       // mistimed: a foul, and sometimes the last man walks
       const red = rand(st) < 0.2;
       st.events.push({ minute: st.minute, type: red ? 'red' : 'yellow', teamId: playerSide(st).id, playerName: cb.name,
@@ -616,7 +664,7 @@ export function resolveDefTackle(st: LiveState, optionId: string): DefTackleOutc
       outcome = red ? 'slide-red' : 'slide-yellow';
     } else {
       // beaten: they are through
-      if (rand(st) < 0.6) concede(st, m.shooterName!, `${m.shooterName} עובר את ${cb.name} ומבקיע`);
+      if (rand(st) < 0.8 * edge(m.q)) concede(st, m.shooterName!, `${m.shooterName} עובר את ${cb.name} ומבקיע`);
       else st.events.push({ minute: st.minute, type: 'chance', teamId: oppSide(st).id, playerName: m.shooterName, text: `${m.shooterName} עבר את הבלם אבל בעט החוצה` });
       outcome = 'slide-beaten';
     }
@@ -628,7 +676,7 @@ export function resolveDefTackle(st: LiveState, optionId: string): DefTackleOutc
     if (rand(st) < p2v1) {
       const mates = oppSide(st).onPitch.filter(p => p.id !== m.shooterId && p.position !== 'GK');
       const mate = mates[Math.floor(rand(st) * mates.length)] ?? striker!;
-      if (rand(st) < 0.5) concede(st, mate.name, `2 על 1! ${m.shooterName} מחכה, ${mate.name} מצטרף ומגמר`);
+      if (rand(st) < 0.64 * edge(m.q)) concede(st, mate.name, `2 על 1! ${m.shooterName} מחכה, ${mate.name} מצטרף ומגמר`);
       else st.events.push({ minute: st.minute, type: 'chance', teamId: oppSide(st).id, playerName: mate.name, text: `2 על 1! ${mate.name} קיבל מסירה אבל בעט לצד` });
       outcome = 'hold-2v1';
     } else {
@@ -644,7 +692,7 @@ export type ShotOutcome = 'goal' | 'save' | 'wide';
 export function resolveShot(st: LiveState, pick: Corner): ShotOutcome {
   const m = st.pending!;
   const beats = pick !== actualDive(st, m.keeperDir!);
-  const scored = beats ? rand(st) < 0.62 : rand(st) < 0.18;
+  const scored = rand(st) < (beats ? 0.42 : 0.12) * edge(m.q);
   let outcome: ShotOutcome;
   if (scored) { scoreForPlayer(st, m.shooterId!, m.shooterName!, `${m.shooterName} מנצח את השוער וכובש!`); outcome = 'goal'; }
   else if (beats) { st.events.push({ minute: st.minute, type: 'chance', teamId: playerSide(st).id, playerName: m.shooterName, text: `${m.shooterName} כיוון טוב, אבל זה יוצא מעט לצד` }); outcome = 'wide'; }
@@ -688,8 +736,8 @@ export function resolveOneOnOne(st: LiveState, optionId: string): OneOnOneOutcom
   const shooter = playerSide(st).onPitch.find(p => p.id === m.shooterId);
   const isDribble = optionId === 'dribble';
   const skill = shooter ? (isDribble ? shooter.attrs.dribbling : shooter.attrs.shooting) : 60;
-  const base = isDribble ? 0.44 : 0.40;
-  const scored = rand(st) < base + (skill - 60) / 200;
+  const base = isDribble ? 0.34 : 0.31;
+  const scored = rand(st) < (base + (skill - 60) / 200) * edge(m.q);
   if (scored) scoreForPlayer(st, m.shooterId!, m.shooterName!, isDribble ? `${m.shooterName} עובר את השוער ומכניס לשער ריק!` : `${m.shooterName} משגר בפס לפינה, אין לשוער סיכוי!`);
   else st.events.push({ minute: st.minute, type: 'chance', teamId: playerSide(st).id, playerName: m.shooterName, text: isDribble ? `${m.shooterName} ניסה לעבור אותו, השוער קרא את זה` : `${m.shooterName} בעט מעל השער, החמצה כואבת` });
   clearMoment(st);
