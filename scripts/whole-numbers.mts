@@ -46,6 +46,7 @@ function audit(gs: G.GameState, where: string) {
 /** A season, audited every round, under a coach whose bias is not a whole number. */
 function season(gs: G.GameState, label: string): G.GameState {
   gs = G.enterSeason(gs);
+  if (gs.phase === 'sponsor') gs = G.takeSponsor(gs, 'base');
   audit(gs, `${label} kickoff`);
   for (let w = 1; w <= gs.league.rounds; w++) {
     const inp = G.liveMatchInput(gs);

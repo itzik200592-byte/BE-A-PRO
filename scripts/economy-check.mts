@@ -36,6 +36,7 @@ function season(tier: number | null, seed: number, money: number | null) {
     gs = { ...gs, league: { ...gs.league, clubs: gs.league.clubs.map(c => c.id === gs.clubId ? { ...c, tier } : c) } };
   }
   gs = G.enterSeason(gs);
+  if (gs.phase === 'sponsor') gs = G.takeSponsor(gs, 'base');
   if (money !== null) gs = { ...gs, meters: { ...gs.meters, money } };
   let low = gs.meters.money;
   for (let w = 1; w <= gs.league.rounds; w++) {

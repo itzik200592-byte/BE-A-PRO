@@ -100,6 +100,7 @@ function Ledger({ l }: { l: G.RoundLedger }) {
     { label: 'פרס מהמשחק', value: l.prize },
   ];
   if (l.gate > 0) rows.push({ label: 'הכנסות שער', value: l.gate });
+  if (l.sponsor > 0) rows.push({ label: 'חסות', value: l.sponsor });
   rows.push({ label: 'שכר שחקנים', value: -l.wages });
   rows.push({ label: 'תחזוקת מגרש', value: -l.pitch });
   if (l.security > 0) rows.push({ label: 'אבטחה במשחק בית', value: -l.security });

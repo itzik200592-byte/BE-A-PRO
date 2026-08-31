@@ -32,6 +32,11 @@ export function StadiumScreen({ gs, onBuild, onBack }: {
   const project = gs.stadium.project;
   const gate = G.stadiumGate(gs);
   const fill = Math.round(G.attendanceFill(gs, false) * 100);
+  const crowd = G.homeAttendance(gs, false);
+  const wanted = G.crowdWanted(gs);
+  const gateNeed = gate && !gate.meets ? gate.need : 0;
+  // seats past what the town turns out for earn nothing until you climb
+  const spare = Math.max(0, cap - wanted);
   const options = G.expansions(gs);
 
   return (
@@ -64,8 +69,10 @@ export function StadiumScreen({ gs, onBuild, onBack }: {
               </div>
               <div style={{ textAlign: 'center' }}>
                 <Icon name="crowd" size={18} color="var(--gold)" />
-                <div className="num" style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)', marginTop: 2 }}>{fill}%</div>
-                <div style={{ fontSize: 11.5, color: 'var(--ink-faint)', fontWeight: 700 }}>תפוסה</div>
+                <div className="num" style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)', marginTop: 2 }}>
+                  {crowd.toLocaleString('en-US')}
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-faint)', fontWeight: 700 }}>נכנסו · {fill}%</div>
               </div>
             </div>
           </div>
@@ -74,6 +81,21 @@ export function StadiumScreen({ gs, onBuild, onBack }: {
         <div className="row" style={{ gap: 8 }}>
           <StatBox label="הכנסת שער למשחק" value={formatMoney(G.homeGateEstimate(gs))} color="var(--win)" />
           <StatBox label="בקופה" value={formatMoney(gs.meters.money)} color="var(--gold)" />
+        </div>
+
+        {/* The one thing that decides whether building is an investment or a
+            decoration: a division only turns out so many people, and seats past
+            that earn nothing until you go up. */}
+        <div className="tile" style={{ padding: '11px 13px', fontSize: 13.5, lineHeight: 1.55, color: 'var(--ink-dim)' }}>
+          <div className="row" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
+            <span className="label-cap">כמה קהל {LEAGUE_NAMES[c.tier]} מביאה</span>
+            <span className="num" style={{ fontWeight: 800, color: 'var(--ink)' }}>{wanted.toLocaleString('en-US')}</span>
+          </div>
+          {spare > 0
+            ? gateNeed > cap
+              ? <>יש לך {spare.toLocaleString('en-US')} מקומות שהליגה הזאת לא ממלאת. הם לא מכניסים כלום עכשיו, אבל בלעדיהם אין עלייה.</>
+              : <>יש לך {spare.toLocaleString('en-US')} מקומות ריקים שלא מכניסים כלום. הרחבה נוספת תשתלם רק אחרי שתעלה ליגה.</>
+            : <>היציע מתמלא. כל מקום שתוסיף מכניס כסף אמיתי.</>}
         </div>
 
         {/* the promotion gate, the hard rule */}

@@ -91,6 +91,8 @@ export function loadCareer(): GameState | null {
       morale: Math.round(s.meters?.morale ?? 65),
       prestige: Math.round(s.meters?.prestige ?? 30),
     },
+    sacking: s.sacking ?? null,
+    sponsor: s.sponsor ?? null,
     chronicle: s.chronicle ?? [],
     chronicleSeen: s.chronicleSeen ?? 0,
     inbox: s.inbox ?? [],

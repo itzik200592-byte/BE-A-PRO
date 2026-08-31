@@ -14,7 +14,8 @@
     "check:goals": "node --experimental-strip-types scripts/goal-origin.mts",
     "check:numbers": "node --experimental-strip-types scripts/whole-numbers.mts",
     "check:debt": "node --experimental-strip-types scripts/debt-check.mts",
-    "check:economy": "node --experimental-strip-types scripts/economy-check.mts"
+    "check:economy": "node --experimental-strip-types scripts/economy-check.mts",
+    "check:climb": "node --experimental-strip-types scripts/climb-check.mts"
   },
   "dependencies": {
     "react": "^18.3.1",

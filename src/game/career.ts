@@ -377,9 +377,23 @@ export function ticketPrice(tier: number): number {
   return [0, 14, 22, 34, 52, 80][Math.max(0, Math.min(TOP_TIER, tier))];
 }
 
-/** Gate takings for a single home match. */
-export function gateIncome(capacity: number, fill: number, tier: number): number {
-  return Math.round(capacity * Math.max(0, Math.min(1, fill)) * ticketPrice(tier));
+/**
+ * How many people the town will actually turn out for, before the ground is
+ * even considered. A ליגה ג׳ club does not draw fourteen thousand because it
+ * built fourteen thousand seats, and letting the gate scale with capacity alone
+ * turned the stadium into a printing press: careers finished in the bottom
+ * division with a 21,000 seat ground and four million in the bank.
+ */
+const DEMAND = [0, 400, 1_800, 7_000, 14_000, 26_000];
+
+export function crowdDemand(tier: number, prestige: number): number {
+  const t = Math.max(1, Math.min(TOP_TIER, Math.round(tier)));
+  return Math.round(DEMAND[t] * (0.6 + Math.max(0, Math.min(100, prestige)) / 125));
+}
+
+/** Gate takings for a single home match, on whoever actually came through the turnstile. */
+export function gateIncome(attendance: number, tier: number): number {
+  return Math.round(Math.max(0, attendance) * ticketPrice(tier));
 }
 
 export interface ExpansionOption {
@@ -401,7 +415,13 @@ const round100 = (n: number) => Math.round(n / 100) * 100;
 export function expansionOptions(tier: number): ExpansionOption[] {
   const t = Math.max(1, Math.min(TOP_TIER, tier));
   const small = [0, 100, 600, 2_000, 4_000, 8_000][t];
-  const per = [0, 900, 500, 320, 300, 380][t];   // cost per seat, small builds carry overheads
+  // Cost per seat, tuned so a stand pays for itself in roughly the same number
+  // of seasons wherever you are: about three and a half at the bottom, five at
+  // the top. It used to run the other way, ₪900 a seat in ליגה ג׳ against a ₪14
+  // ticket and ₪300 in the לאומית against ₪52, so building took fourteen seasons
+  // to repay when you were poor and one when you were already rich. Nobody would
+  // ever build at the bottom, and at the top it simply printed money.
+  const per = [0, 230, 390, 660, 1_100, 1_850][t];
   const big = small * 3;
   return [
     { key: 'expand', label: 'הרחבת יציע', addSeats: small, cost: round100(small * per), rounds: 2 },

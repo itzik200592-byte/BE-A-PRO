@@ -10,6 +10,10 @@ import { initLeague, applyResult, sortedTable, buildFixtures, emptyTable } from 
 import { LEAGUE_C, isDerby, LEAGUE_NAMES, setDerbies, derbiesFromClubs } from '../data/clubs.ts';
 import { buildRegionLeague } from '../data/cities.ts';
 import { debtState, debtLine } from './finance.ts';
+import { sponsorOffers, signSponsor, sponsorRound } from './sponsor.ts';
+import type { Sponsor, SponsorOffer, SponsorId } from './sponsor.ts';
+export type { Sponsor, SponsorOffer, SponsorId };
+export { SPONSOR_BRAND } from './sponsor.ts';
 import type { DebtState } from './finance.ts';
 export { debtLine };
 export type { DebtState };
@@ -36,7 +40,7 @@ import { chronicleAfterRound, chronicleAtSeasonEnd } from './chronicle.ts';
 import type { SeasonReport } from './career.ts';
 import {
   buildNextSeason, matchPrize, roundCosts, fillWithYouth, TOP_TIER,
-  STADIUM_START, requiredCapacity, stadiumImageTier, gateIncome, expansionOptions,
+  STADIUM_START, requiredCapacity, stadiumImageTier, gateIncome, crowdDemand, expansionOptions,
 } from './career.ts';
 import type { RoundCosts, ExpansionOption } from './career.ts';
 import type { Coach } from './coach.ts';
@@ -55,7 +59,7 @@ export type Phase =
   | 'onboard-archetype' | 'onboard-manager' | 'onboard-club' | 'signing' | 'squad' | 'hub' | 'transfers'
   | 'dilemma' | 'tactic' | 'vs' | 'match' | 'result' | 'press' | 'season-end' | 'chronicle'
   | 'captain' | 'assistant' | 'coach' | 'preseason' | 'preseason-market' | 'inbox' | 'chat' | 'table' | 'stadium'
-  | 'packs' | 'sacked';
+  | 'packs' | 'sacked' | 'sponsor';
 
 export type MarketLine = 'gk' | 'def' | 'mid' | 'atk';
 
@@ -81,7 +85,7 @@ export interface Stadium { capacity: number; project: StadiumProject | null; }
 export interface StadiumReveal { image: number; capacity: number; addSeats: number; upgraded: boolean; }
 
 /** What the round earned and what it cost to run. */
-export interface RoundLedger extends RoundCosts { prize: number; gate: number; net: number; }
+export interface RoundLedger extends RoundCosts { prize: number; gate: number; sponsor: number; net: number; }
 export interface Tactic { approach: Approach; press: Press; formation: FormationId; }
 export interface RoundResult { homeId: string; awayId: string; hg: number; ag: number; }
 
@@ -168,6 +172,8 @@ export interface GameState {
   press: { outlet: Outlet; q: PressQuestion } | null;
   /** set the moment the owner ends it, and never cleared: the career is over */
   sacking: Sacking | null;
+  /** the shirt deal for this season, re-negotiated every summer */
+  sponsor: Sponsor | null;
   style: ManagerStyle;
   /** per player season record for the whole division, drives the charts */
   seasonStats: Record<string, PlayerSeason>;
@@ -258,6 +264,7 @@ export function newGame(seed = 12345): GameState {
     lastRound: [],
     press: null,
     sacking: null,
+    sponsor: null,
     style: { players: 0, media: 0, money: 0 },
     seasonStats: {},
     careerStats: {},
@@ -509,7 +516,26 @@ function finishPreseason(gs: GameState): GameState {
 }
 
 export function enterSeason(gs: GameState): GameState {
+  // the shirt is sold before a ball is kicked, and re-sold every summer
+  if (!gs.sponsor || gs.sponsor.season !== gs.season) return { ...gs, phase: 'sponsor' };
   return maybeAssistantDeparture({ ...gs, phase: 'hub' });
+}
+
+/** The three deals on the table this summer. */
+export function sponsorChoices(gs: GameState): SponsorOffer[] {
+  return sponsorOffers(club(gs).tier, gs.meters.prestige, gs.league.rounds);
+}
+
+export function takeSponsor(gs: GameState, id: SponsorId): GameState {
+  const offer = sponsorChoices(gs).find(o => o.id === id) ?? sponsorChoices(gs)[0];
+  return maybeAssistantDeparture({
+    ...gs, phase: 'hub', sponsor: signSponsor(offer, gs.season),
+  });
+}
+
+/** What the shirt is worth this round, given who is in the ground. */
+export function sponsorThisRound(gs: GameState, isDerby = false): number {
+  return sponsorRound(gs.sponsor, club(gs).tier, homeAttendance(gs, isDerby));
 }
 
 /* ------------------------------------------------- pre season, the business */
@@ -624,7 +650,7 @@ export function resolveDeparture(gs: GameState, kind: 'star' | 'young', optionIn
     const contracts = { ...gs.contracts, [p.id]: 3 };
     return {
       ...gs, preResolved: resolved, contracts,
-      meters: { ...gs.meters, money: cash(Math.max(0, gs.meters.money - bonus)), morale: meter(gs.meters.morale + 4) },
+      meters: { ...gs.meters, money: cash(gs.meters.money - bonus), morale: meter(gs.meters.morale + 4) },
       style: scoreStyle(gs.style, { money: -bonus, morale: 4 }),
       pendingOutcome: `${p.name} חתם חוזה חדש ומחייך. ${formatK(bonus)} מהקופה, אבל הכישרון נשאר בבית לשלוש שנים.`,
     };
@@ -651,7 +677,7 @@ export function renewContract(gs: GameState, playerId: string): GameState {
   return {
     ...gs, contracts,
     preResolved: [...gs.preResolved, `renew-${playerId}`],
-    meters: { ...gs.meters, money: Math.max(0, gs.meters.money - terms.signOn) },
+    meters: { ...gs.meters, money: cash(gs.meters.money - terms.signOn) },
     pendingOutcome: `${p.name} חתם חוזה ל${terms.years === 1 ? 'עונה' : `${terms.years} עונות`}. ${formatK(terms.signOn)} דמי חתימה.`,
   };
 }
@@ -703,7 +729,23 @@ export function attendanceFill(gs: GameState, isDerby: boolean): number {
 
 /** A representative home gate, for showing on the stadium screen. */
 export function homeGateEstimate(gs: GameState): number {
-  return gateIncome(gs.stadium.capacity, attendanceFill(gs, false), club(gs).tier);
+  return gateIncome(homeAttendance(gs, false), club(gs).tier);
+}
+
+/**
+ * The people actually in the ground: the smaller of the seats you own and the
+ * crowd the town will turn out, times how full that gets. Seats past the town's
+ * appetite earn nothing, which is why over building for a division is waste
+ * rather than free money.
+ */
+/** How many the town would come if there were room, whatever the ground holds. */
+export function crowdWanted(gs: GameState): number {
+  return crowdDemand(club(gs).tier, gs.meters.prestige);
+}
+
+export function homeAttendance(gs: GameState, isDerby: boolean): number {
+  const want = crowdDemand(club(gs).tier, gs.meters.prestige) * (isDerby ? 1.15 : 1);
+  return Math.round(Math.min(gs.stadium.capacity, want) * attendanceFill(gs, isDerby));
 }
 
 /**
@@ -820,7 +862,7 @@ export function startStadiumProject(gs: GameState, key: ExpansionOption['key']):
   if (!opt || expansionBlockedReason(gs, opt)) return gs;
   return {
     ...gs,
-    meters: { ...gs.meters, money: Math.max(0, gs.meters.money - opt.cost) },
+    meters: { ...gs.meters, money: cash(gs.meters.money - opt.cost) },
     stadium: {
       capacity: gs.stadium.capacity,
       project: { label: opt.label, addSeats: opt.addSeats, roundsLeft: opt.rounds, total: opt.rounds },
@@ -1586,16 +1628,18 @@ export function commitRound(gs: GameState, playerResult: MatchResult): GameState
     isDerby: derby, rounds: gs.league.rounds,
   });
   // a home crowd pays at the gate, the reward for a bigger ground
-  const gate = iAmHome ? gateIncome(gs.stadium.capacity, attendanceFill(gs, derby), club(gs).tier) : 0;
+  const gate = iAmHome ? gateIncome(homeAttendance(gs, derby), club(gs).tier) : 0;
+  // the shirt pays every week, and the crowd deal pays on who actually turns up
+  const shirt = sponsorRound(gs.sponsor, club(gs).tier, homeAttendance(gs, derby));
   // any build in progress moves a round closer to opening
   const built = advanceStadium(gs);
 
   const nextBase: GameState = {
     ...gs,
     phase: 'result',
-    lastLedger: { prize, gate, ...costs, net: prize + gate - costs.total },
+    lastLedger: { prize, gate, sponsor: shirt, ...costs, net: prize + gate + shirt - costs.total },
     meters: {
-      money: cash(gs.meters.money + prize + gate - costs.total),
+      money: cash(gs.meters.money + prize + gate + shirt - costs.total),
       morale: meter(gs.meters.morale + moraleDelta),
       prestige: meter(gs.meters.prestige + (won ? 2 : draw ? 0 : -1)),
     },
@@ -1907,7 +1951,10 @@ export function startNextSeason(gs: GameState): GameState {
 
   // Wages are paid weekly during the season now, so the summer is the prize
   // money only. Arriving at the break already broke still costs you the room.
-  const rawMoney = gs.meters.money + r.purse;
+  // the results deal pays its lump the summer you actually go up
+  const wentUp = r.result === 'champion' || r.result === 'promoted';
+  const shirtBonus = wentUp ? (gs.sponsor?.promotionBonus ?? 0) : 0;
+  const rawMoney = gs.meters.money + r.purse + shirtBonus;
   const brokeIt = gs.meters.money <= 0;
   const moraleDelta = (r.result === 'relegated' ? -12 : +6) + (brokeIt ? -10 : 0);
 
@@ -1922,8 +1969,11 @@ export function startNextSeason(gs: GameState): GameState {
     league,
     market: makeMarket(r.newTier, rng, 12, takenNames),
     meters: {
-      // prize money in, a full season of wages out
-      money: Math.max(0, rawMoney),
+      // prize money in, a full season of wages out. Not floored: a debt that
+      // vanished every summer was the same bug as the one the round ledger had,
+      // and it would have quietly forgiven anything the owner was about to sack
+      // you for.
+      money: cash(rawMoney),
       morale: meter(gs.meters.morale + moraleDelta),
       prestige: meter(gs.meters.prestige + prestigeDelta - (brokeIt ? 4 : 0)),
     },

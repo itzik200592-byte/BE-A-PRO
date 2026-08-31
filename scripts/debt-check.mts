@@ -39,6 +39,7 @@ function career(startMoney: number) {
   gs = G.pickClub(gs, gs.league.clubs[0].id);
   gs = G.afterSigning(gs, {});
   gs = G.enterSeason(gs);
+  if (gs.phase === 'sponsor') gs = G.takeSponsor(gs, 'base');
   gs = { ...gs, meters: { ...gs.meters, money: startMoney } };
 
   const seen = new Set<string>();
@@ -80,7 +81,30 @@ if (doomed.gs.sacking) {
 // a solvent club is never touched
 const safe = career(200_000);
 check('a club in the black is left alone', !safe.gs.sacking, `money ${safe.gs.meters.money}`);
-check('the debt is real and does accumulate', career(0).gs.meters.money < 0 || safe.gs.meters.money < 200_000);
+/* ---- the floor is really gone: the purse is never quietly clamped to zero */
+{
+  let gs = G.newGame(555);
+  gs = G.setProfile(gs, { name: 'א', nickname: '', age: 40, type: 'mental' });
+  gs = G.pickClub(gs, gs.league.clubs[0].id);
+  gs = G.afterSigning(gs, {});
+  gs = G.enterSeason(gs);
+  if (gs.phase === 'sponsor') gs = G.takeSponsor(gs, 'base');
+  const before = -50_000;
+  gs = { ...gs, meters: { ...gs.meters, money: before } };
+  const inp = G.liveMatchInput(gs);
+  const res = simulateMatch(
+    { id: inp.homeId, name: inp.homeName, players: inp.iAmHome ? inp.playerStarters : inp.oppStarters,
+      tactic: { formation: DEFAULT_FORMATION, approach: 'balanced', press: 'mid' }, chemistry: 0.7, isHome: true },
+    { id: inp.awayId, name: inp.awayName, players: inp.iAmHome ? inp.oppStarters : inp.playerStarters,
+      tactic: { formation: DEFAULT_FORMATION, approach: 'balanced', press: 'mid' }, chemistry: 0.7, isHome: false },
+    inp.seed);
+  gs = G.commitRound(gs, res);
+  const net = gs.lastLedger!.net;
+  // exactly what the ledger says, to the shekel, with nothing clamped away
+  check('the purse moves by exactly the ledger, never floored',
+    gs.meters.money === before + net, `${before} + ${net} = ${gs.meters.money}`);
+  check('a club in the red stays in the red', gs.meters.money < 0, String(gs.meters.money));
+}
 
 /* ---- the way out has to be open */
 {
@@ -89,6 +113,7 @@ check('the debt is real and does accumulate', career(0).gs.meters.money < 0 || s
   gs = G.pickClub(gs, gs.league.clubs[0].id);
   gs = G.afterSigning(gs, {});
   gs = G.enterSeason(gs);
+  if (gs.phase === 'sponsor') gs = G.takeSponsor(gs, 'base');
   // push the calendar to a week the window is shut
   let shut = gs;
   for (let w = 1; w <= 12 && G.transferWindow(shut).open; w++) shut = { ...shut, week: shut.week + 1 };

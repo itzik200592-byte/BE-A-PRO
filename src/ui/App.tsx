@@ -21,6 +21,7 @@ import { ResultScreen } from './screens/Result.tsx';
 import { PressScreen } from './screens/Press.tsx';
 import { SeasonEnd, PreSeasonScreen } from './screens/SeasonEnd.tsx';
 import { SackedScreen } from './screens/Sacked.tsx';
+import { SponsorScreen } from './screens/Sponsor.tsx';
 import { ChronicleScreen } from './screens/Chronicle.tsx';
 import { InboxScreen } from './screens/Inbox.tsx';
 import { ChatScreen } from './screens/Chat.tsx';
@@ -206,6 +207,7 @@ export function App() {
       {gs.phase === 'table' && <StandingsScreen gs={gs} onBack={() => setGs(G.closeTable(gs))} />}
       {gs.phase === 'season-end' && <SeasonEnd gs={gs} onContinue={() => setGs(G.startNextSeason(gs))} />}
       {gs.phase === 'sacked' && <SackedScreen gs={gs} onNewCareer={startNew} />}
+      {gs.phase === 'sponsor' && <SponsorScreen gs={gs} onPick={id => setGs(G.takeSponsor(gs, id))} />}
       {gs.phase === 'preseason' && <PreSeasonScreen gs={gs} onStart={() => setGs(G.enterPreseason(gs))} />}
 
       {tutorial && <Tutorial onDone={() => setTutorial(false)} />}
