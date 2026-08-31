@@ -358,7 +358,13 @@ export function roundCosts(input: {
 export const STADIUM_START = 50;
 
 /** Minimum capacity a division demands. Below it you cannot be promoted into it. */
-const TIER_MIN: Record<number, number> = { 3: 5_000, 4: 10_000, 5: 18_000 };
+/**
+ * The ground a division insists on before it will have you. Set just under what
+ * that division actually draws, since a league does not ask for a stadium three
+ * times the size of its own crowd: ליגה א׳ turns out about 1,500, so it wants a
+ * ground that can hold them, not five thousand empty seats.
+ */
+const TIER_MIN: Record<number, number> = { 3: 1_200, 4: 3_500, 5: 12_000 };
 export function requiredCapacity(tier: number): number {
   return TIER_MIN[tier] ?? 0;
 }
@@ -384,11 +390,26 @@ export function ticketPrice(tier: number): number {
  * turned the stadium into a printing press: careers finished in the bottom
  * division with a 21,000 seat ground and four million in the bank.
  */
-const DEMAND = [0, 400, 1_800, 7_000, 14_000, 26_000];
+const DEMAND = [0, 250, 700, 1_500, 4_500, 16_000];
 
 export function crowdDemand(tier: number, prestige: number): number {
   const t = Math.max(1, Math.min(TOP_TIER, Math.round(tier)));
   return Math.round(DEMAND[t] * (0.6 + Math.max(0, Math.min(100, prestige)) / 125));
+}
+
+/**
+ * What the shirt sponsor pays for the boards around the pitch, per round.
+ *
+ * It is paid on SEATS rather than on the crowd, because the advertising is
+ * bought for the ground it goes in, not for who turned up that week. That is
+ * what gives a stand a second way of repaying itself, and the only reason to
+ * build a little ahead of the town's appetite.
+ */
+const SIGN_RATE = [0, 2.5, 3.5, 5, 7, 10];
+
+export function signageRound(tier: number, capacity: number): number {
+  const t = Math.max(1, Math.min(TOP_TIER, Math.round(tier)));
+  return Math.round(Math.max(0, capacity) * SIGN_RATE[t]);
 }
 
 /** Gate takings for a single home match, on whoever actually came through the turnstile. */
@@ -412,17 +433,27 @@ const round100 = (n: number) => Math.round(n / 100) * 100;
  * seat stand, and it scales up sharply with every promotion so the ground can
  * actually reach what the top divisions demand.
  */
+/**
+ * What a ground of that division is actually built in, in seats. Sized to real
+ * Israeli football rather than to a formula: a ליגה ג׳ club adds a hundred
+ * places, a ליגת העל club opens a thirty thousand seat stand.
+ */
+const EXPAND_SEATS = [0, 100, 500, 1_000, 2_500, 12_000];
+const STAND_SEATS = [0, 250, 750, 1_500, 5_000, 30_000];
+
+/**
+ * Cost per seat, tuned so a stand repays in roughly four seasons out of the
+ * gate and the perimeter boards together, wherever you are. It used to run the
+ * other way, ₪900 a seat in ליגה ג׳ against a ₪14 ticket and ₪300 in the
+ * לאומית against ₪52, so building took fourteen seasons to repay when you were
+ * poor and one when you were already rich.
+ */
+const SEAT_COST = [0, 400, 600, 900, 1_350, 2_050];
+
 export function expansionOptions(tier: number): ExpansionOption[] {
   const t = Math.max(1, Math.min(TOP_TIER, tier));
-  const small = [0, 100, 600, 2_000, 4_000, 8_000][t];
-  // Cost per seat, tuned so a stand pays for itself in roughly the same number
-  // of seasons wherever you are: about three and a half at the bottom, five at
-  // the top. It used to run the other way, ₪900 a seat in ליגה ג׳ against a ₪14
-  // ticket and ₪300 in the לאומית against ₪52, so building took fourteen seasons
-  // to repay when you were poor and one when you were already rich. Nobody would
-  // ever build at the bottom, and at the top it simply printed money.
-  const per = [0, 230, 390, 660, 1_100, 1_850][t];
-  const big = small * 3;
+  const per = SEAT_COST[t];
+  const small = EXPAND_SEATS[t], big = STAND_SEATS[t];
   return [
     { key: 'expand', label: 'הרחבת יציע', addSeats: small, cost: round100(small * per), rounds: 2 },
     { key: 'stand', label: 'יציע חדש', addSeats: big, cost: round100(big * per * 1.08), rounds: 4 },

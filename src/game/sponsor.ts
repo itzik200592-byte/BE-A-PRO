@@ -47,10 +47,12 @@ export interface Sponsor {
 export const SPONSOR_BRAND = 'ULTRASKIT';
 
 /** What the brand will spend on a club in this division, across a season. */
-const SEASON_VALUE = [0, 90_000, 170_000, 560_000, 1_150_000, 2_700_000];
+const SEASON_VALUE = [0, 45_000, 85_000, 280_000, 575_000, 1_350_000];
 
 /** The crowd a division expects, which the crowd deal is measured against. */
-const EXPECTED_CROWD = [0, 300, 1_500, 6_000, 12_000, 22_000];
+// kept in step with career.ts DEMAND, so the crowd deal pays 1.0 for a normal
+// turnout and up to 2.0 for a ground that is genuinely packed
+const EXPECTED_CROWD = [0, 250, 700, 1_500, 4_500, 16_000];
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 

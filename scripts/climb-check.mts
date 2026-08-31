@@ -1,8 +1,8 @@
 /**
  * The climb.
  *
- * ליגה א׳ will not have you without a 5,000 seat ground, and you start on fifty
- * benches. That gate only means something if the money to build it is reachable
+ * ליגה א׳ will not have you without a ground big enough for its crowd, and you
+ * start on fifty benches. That gate only means something if the money to build it is reachable
  * without the game becoming a spreadsheet, and if the club can still get into
  * trouble on the way. So this plays out careers that always build whatever they
  * can afford, and reports how long the ladder takes and how close to the edge
@@ -45,7 +45,7 @@ function career(seed: number, deal: SponsorId) {
   gs = G.afterSigning(gs, {});
 
   let lowest = Infinity;
-  let reached5k = 0, reachedTier3 = 0;
+  let reachedGate = 0, reachedTier3 = 0;
   let s = 1;
   for (; s <= SEASONS; s++) {
     gs = G.enterSeason(gs);
@@ -79,7 +79,7 @@ function career(seed: number, deal: SponsorId) {
       if (gs.phase === 'season-end') break;
     }
     if (gs.sacking) break;
-    if (!reached5k && gs.stadium.capacity >= requiredCapacity(3)) reached5k = s;
+    if (!reachedGate && gs.stadium.capacity >= requiredCapacity(3)) reachedGate = s;
     if (!reachedTier3 && G.club(gs).tier >= 3) reachedTier3 = s;
     gs = G.startNextSeason(gs);
     if (!reachedTier3 && G.club(gs).tier >= 3) reachedTier3 = s;
@@ -87,7 +87,7 @@ function career(seed: number, deal: SponsorId) {
   return {
     sacked: !!gs.sacking, sackedIn: gs.sacking ? s : 0,
     tier: G.club(gs).tier, capacity: gs.stadium.capacity,
-    money: gs.meters.money, lowest, reached5k, reachedTier3,
+    money: gs.meters.money, lowest, reachedGate, reachedTier3,
   };
 }
 
@@ -98,11 +98,11 @@ const avg = (a: number[]) => a.reduce((x, y) => x + y, 0) / (a.length || 1);
 console.log(`${SEEDS.length} careers, ${SEASONS} seasons each, always building\n`);
 for (const deal of ['base', 'results', 'crowd'] as SponsorId[]) {
   const rs = SEEDS.map(s => career(s, deal));
-  const got5k = rs.filter(r => r.reached5k > 0);
+  const gotGate = rs.filter(r => r.reachedGate > 0);
   const gotUp = rs.filter(r => r.reachedTier3 > 0);
   console.log(`${deal.padEnd(8)} sacked ${rs.filter(r => r.sacked).length}/${SEEDS.length}` +
-    `   reached 5,000 seats ${got5k.length}/${SEEDS.length}` +
-    (got5k.length ? ` in ~${avg(got5k.map(r => r.reached5k)).toFixed(1)} seasons` : '') +
+    `   built the ${requiredCapacity(3).toLocaleString('en-US')} seats ליגה א׳ wants ${gotGate.length}/${SEEDS.length}` +
+    (gotGate.length ? ` in ~${avg(gotGate.map(r => r.reachedGate)).toFixed(1)} seasons` : '') +
     `   into ליגה א׳ ${gotUp.length}/${SEEDS.length}`);
   console.log(`         end: ${LEAGUE_NAMES[Math.round(avg(rs.map(r => r.tier)))]}` +
     `  capacity ${Math.round(avg(rs.map(r => r.capacity))).toLocaleString('en-US')}` +

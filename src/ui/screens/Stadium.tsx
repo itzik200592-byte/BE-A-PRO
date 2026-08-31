@@ -80,6 +80,7 @@ export function StadiumScreen({ gs, onBuild, onBack }: {
 
         <div className="row" style={{ gap: 8 }}>
           <StatBox label="הכנסת שער למשחק" value={formatMoney(G.homeGateEstimate(gs))} color="var(--win)" />
+          <StatBox label="שילוט למחזור" value={formatMoney(G.signageEstimate(gs))} color="var(--sky)" />
           <StatBox label="בקופה" value={formatMoney(gs.meters.money)} color="var(--gold)" />
         </div>
 
@@ -93,9 +94,9 @@ export function StadiumScreen({ gs, onBuild, onBack }: {
           </div>
           {spare > 0
             ? gateNeed > cap
-              ? <>יש לך {spare.toLocaleString('en-US')} מקומות שהליגה הזאת לא ממלאת. הם לא מכניסים כלום עכשיו, אבל בלעדיהם אין עלייה.</>
-              : <>יש לך {spare.toLocaleString('en-US')} מקומות ריקים שלא מכניסים כלום. הרחבה נוספת תשתלם רק אחרי שתעלה ליגה.</>
-            : <>היציע מתמלא. כל מקום שתוסיף מכניס כסף אמיתי.</>}
+              ? <>{spare.toLocaleString('en-US')} מקומות שהליגה הזאת לא ממלאת. הם מרוויחים רק שילוט, אבל בלעדיהם אין עלייה.</>
+              : <>{spare.toLocaleString('en-US')} מקומות ריקים. הם עדיין מרוויחים שילוט, אבל לא כרטיסים.</>
+            : <>היציע מתמלא. כל מקום שתוסיף מכניס גם כרטיסים וגם שילוט.</>}
         </div>
 
         {/* the promotion gate, the hard rule */}

@@ -33,19 +33,36 @@ for (const tier of [1, 3, 5]) {
 }
 
 /* ---- a career driven into the ground */
-function career(startMoney: number) {
+function career(startMoney: number, reckless = false, seasons = 1, tier = 1) {
   let gs = G.newGame(4242);
   gs = G.setProfile(gs, { name: 'א', nickname: '', age: 40, type: 'mental' });
   gs = G.pickClub(gs, gs.league.clubs[0].id);
   gs = G.afterSigning(gs, {});
+  if (tier !== 1) {
+    gs = { ...gs, league: { ...gs.league, clubs: gs.league.clubs.map(c => c.id === gs.clubId ? { ...c, tier } : c) } };
+  }
   gs = G.enterSeason(gs);
   if (gs.phase === 'sponsor') gs = G.takeSponsor(gs, 'base');
   gs = { ...gs, meters: { ...gs.meters, money: startMoney } };
 
   const seen = new Set<string>();
   let rounds = 0;
+  for (let season = 1; season <= seasons && !gs.sacking; season++) {
+  if (season > 1) {
+    gs = G.startNextSeason(gs);
+    gs = G.enterSeason(gs);
+    if (gs.phase === 'sponsor') gs = G.takeSponsor(gs, 'base');
+  }
   for (let w = 1; w <= gs.league.rounds && !gs.sacking; w++) {
     seen.add(G.debt(gs).level);
+    // The realistic road to bankruptcy is not losing, it is overspending: the
+    // biggest stand on offer, every time there is cash for it, with nothing kept
+    // back for wages. A manager who does that must end up out of a job.
+    if (reckless && !gs.stadium.project) {
+      for (const o of [...G.expansions(gs)].reverse()) {
+        if (!G.expansionBlockedReason(gs, o)) { gs = G.startStadiumProject(gs, o.key); break; }
+      }
+    }
     const inp = G.liveMatchInput(gs);
     const res = simulateMatch(
       { id: inp.homeId, name: inp.homeName, players: inp.iAmHome ? inp.playerStarters : inp.oppStarters,
@@ -60,14 +77,19 @@ function career(startMoney: number) {
     if (gs.phase === 'chat') gs = G.closeChat(gs);
     if (gs.phase === 'season-end') break;
   }
+  }
   return { gs, seen, rounds };
 }
 
-// starting just inside the line, a bad run must finish the job
-const lim1 = debtLimit(1);
-const doomed = career(-Math.round(lim1 * 0.9));
-check('a hole that deep ends in the sack', !!doomed.gs.sacking,
+// The realistic sack: a club that goes up and cannot carry the division it
+// landed in. ליגה ג׳ cannot bankrupt anyone, its whole annual budget is smaller
+// than the rope the owner gives, and that is correct: it is where you learn.
+// The wage bill jumps sixfold into ליגה א׳, and that is where the job is lost.
+const doomed = career(0, true, 4, 3);
+check('promoted, broke, and unable to carry it: sacked', !!doomed.gs.sacking,
   doomed.gs.sacking ? `after ${doomed.rounds} rounds` : `survived, money ${doomed.gs.meters.money}`);
+check('ליגה ג׳ cannot sack you, there is not enough money to lose',
+  !career(0, true, 6, 1).gs.sacking);
 check('the sack sends you to the letter', doomed.gs.phase === 'sacked', `phase ${doomed.gs.phase}`);
 if (doomed.gs.sacking) {
   const s = doomed.gs.sacking;
@@ -79,7 +101,7 @@ if (doomed.gs.sacking) {
 }
 
 // a solvent club is never touched
-const safe = career(200_000);
+const safe = career(200_000, false, 3);
 check('a club in the black is left alone', !safe.gs.sacking, `money ${safe.gs.meters.money}`);
 /* ---- the floor is really gone: the purse is never quietly clamped to zero */
 {

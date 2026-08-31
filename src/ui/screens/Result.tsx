@@ -101,6 +101,7 @@ function Ledger({ l }: { l: G.RoundLedger }) {
   ];
   if (l.gate > 0) rows.push({ label: 'הכנסות שער', value: l.gate });
   if (l.sponsor > 0) rows.push({ label: 'חסות', value: l.sponsor });
+  if (l.signage > 0) rows.push({ label: 'שילוט באצטדיון', value: l.signage });
   rows.push({ label: 'שכר שחקנים', value: -l.wages });
   rows.push({ label: 'תחזוקת מגרש', value: -l.pitch });
   if (l.security > 0) rows.push({ label: 'אבטחה במשחק בית', value: -l.security });

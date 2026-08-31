@@ -40,7 +40,7 @@ import { chronicleAfterRound, chronicleAtSeasonEnd } from './chronicle.ts';
 import type { SeasonReport } from './career.ts';
 import {
   buildNextSeason, matchPrize, roundCosts, fillWithYouth, TOP_TIER,
-  STADIUM_START, requiredCapacity, stadiumImageTier, gateIncome, crowdDemand, expansionOptions,
+  STADIUM_START, requiredCapacity, stadiumImageTier, gateIncome, crowdDemand, signageRound, expansionOptions,
 } from './career.ts';
 import type { RoundCosts, ExpansionOption } from './career.ts';
 import type { Coach } from './coach.ts';
@@ -85,7 +85,7 @@ export interface Stadium { capacity: number; project: StadiumProject | null; }
 export interface StadiumReveal { image: number; capacity: number; addSeats: number; upgraded: boolean; }
 
 /** What the round earned and what it cost to run. */
-export interface RoundLedger extends RoundCosts { prize: number; gate: number; sponsor: number; net: number; }
+export interface RoundLedger extends RoundCosts { prize: number; gate: number; sponsor: number; signage: number; net: number; }
 export interface Tactic { approach: Approach; press: Press; formation: FormationId; }
 export interface RoundResult { homeId: string; awayId: string; hg: number; ag: number; }
 
@@ -728,6 +728,11 @@ export function attendanceFill(gs: GameState, isDerby: boolean): number {
 }
 
 /** A representative home gate, for showing on the stadium screen. */
+/** What the boards pay each round, which is why a bigger ground is worth more. */
+export function signageEstimate(gs: GameState): number {
+  return gs.sponsor ? signageRound(club(gs).tier, gs.stadium.capacity) : 0;
+}
+
 export function homeGateEstimate(gs: GameState): number {
   return gateIncome(homeAttendance(gs, false), club(gs).tier);
 }
@@ -1631,15 +1636,17 @@ export function commitRound(gs: GameState, playerResult: MatchResult): GameState
   const gate = iAmHome ? gateIncome(homeAttendance(gs, derby), club(gs).tier) : 0;
   // the shirt pays every week, and the crowd deal pays on who actually turns up
   const shirt = sponsorRound(gs.sponsor, club(gs).tier, homeAttendance(gs, derby));
+  // and the boards around the pitch are bought for the ground, crowd or no crowd
+  const boards = gs.sponsor ? signageRound(club(gs).tier, gs.stadium.capacity) : 0;
   // any build in progress moves a round closer to opening
   const built = advanceStadium(gs);
 
   const nextBase: GameState = {
     ...gs,
     phase: 'result',
-    lastLedger: { prize, gate, sponsor: shirt, ...costs, net: prize + gate + shirt - costs.total },
+    lastLedger: { prize, gate, sponsor: shirt, signage: boards, ...costs, net: prize + gate + shirt + boards - costs.total },
     meters: {
-      money: cash(gs.meters.money + prize + gate + shirt - costs.total),
+      money: cash(gs.meters.money + prize + gate + shirt + boards - costs.total),
       morale: meter(gs.meters.morale + moraleDelta),
       prestige: meter(gs.meters.prestige + (won ? 2 : draw ? 0 : -1)),
     },
