@@ -11,6 +11,8 @@ import { ScorePair } from '../components/bits.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Portal } from '../components/Portal.tsx';
 import { LivePitch } from '../components/LivePitch.tsx';
+import type { PitchPlay } from '../components/LivePitch.tsx';
+import { eventToPlay } from '../../game/pitchSim.ts';
 import { ovrColor } from './Squad.tsx';
 import type { IconName } from '../components/Icon.tsx';
 
@@ -131,6 +133,39 @@ export function MatchBroadcast({ gs, onDone }: { gs: G.GameState; onDone: (r: Ma
   const [defKeeperOutcome, setDefKeeperOutcome] = useState<L.DefKeeperOutcome | null>(null);
   const [defTackleOutcome, setDefTackleOutcome] = useState<L.DefTackleOutcome | null>(null);
 
+  /**
+   * The pitch leads the broadcast.
+   *
+   * The engine settles a goal the instant it decides one, but the ball still
+   * has to get there, so the score and the commentary are held back until the
+   * pitch reports the ball has arrived. Without this the banner said GOAL and
+   * the scoreline flipped while the ball was on the halfway line, which is the
+   * single thing that made the match read as fake.
+   *
+   * `shown` is how much of the event list the manager is allowed to see, and
+   * `play` is the move currently being acted out. The timer is the safety net:
+   * a backgrounded tab stops animating, and the match must not stall on a frame
+   * that never comes.
+   */
+  const shown = useRef(st.events.length);
+  const shownScore = useRef<[number, number]>([st.score[0], st.score[1]]);
+  const [play, setPlay] = useState<PitchPlay | null>(null);
+  const playSeq = useRef(0);
+
+  const reveal = () => {
+    shown.current = st.events.length;
+    shownScore.current = [st.score[0], st.score[1]];
+    setPlay(null);
+    force();
+  };
+  // never wait longer than this on the pitch, whatever the browser is doing
+  useEffect(() => {
+    if (!play) return;
+    if (!play.scored) return;                 // nothing is being held back
+    const t = window.setTimeout(reveal, 3200);
+    return () => window.clearTimeout(t);
+  }, [play]);
+
   const fx = G.playerFixture(gs)!;
   const homeClub = gs.league.clubs.find(c => c.id === fx.homeId)!;
   const awayClub = gs.league.clubs.find(c => c.id === fx.awayId)!;
@@ -138,24 +173,44 @@ export function MatchBroadcast({ gs, onDone }: { gs: G.GameState; onDone: (r: Ma
 
   // the clock also stops while the bench sheet is open, so managing a sub is not
   // a race against the minute, and the sheet is not re-rendered out from under you
-  const running = st.phase === 'play' && !paused && !st.pending && !subOpen && !penOutcome && !fkOutcome && !shotOutcome && !oneOnOneOutcome && !defKeeperOutcome && !defTackleOutcome;
+  const running = st.phase === 'play' && !paused && !st.pending && !play?.scored && !subOpen && !penOutcome && !fkOutcome && !shotOutcome && !oneOnOneOutcome && !defKeeperOutcome && !defTackleOutcome;
   useEffect(() => {
     if (!running) return;
-    const id = window.setInterval(() => { L.step(st); force(); }, MS_PER_MIN / speed);
+    const id = window.setInterval(() => {
+      L.step(st);
+      // A GOAL waits for the ball: the clock stops, the score and the banner
+      // are held, and the pitch is left to play the move out. Everything else,
+      // a chance or a save, is shown at once and merely acted out behind, since
+      // no number moves and a beat's lag there is invisible.
+      const fire = eventToPlay(st.events, shown.current, st.home.id);
+      if (fire) setPlay({ id: ++playSeq.current, ...fire });
+      if (!fire || !fire.scored) {
+        shown.current = st.events.length;
+        shownScore.current = [st.score[0], st.score[1]];
+      }
+      force();
+    }, MS_PER_MIN / speed);
     return () => window.clearInterval(id);
   }, [running, speed, st]);
 
+  // a decision popup resolves off the clock, so let its outcome through
+  useEffect(() => {
+    if (st.pending || play) return;
+    if (st.events.length !== shown.current) reveal();
+  });
+
   const [flash, setFlash] = useState<L.LiveEvent | null>(null);
   const lastGoal = useRef(0);
-  const bigCount = st.events.reduce((n, e) => n + (e.big ? 1 : 0), 0);
-  // raise the banner only when a new goal lands
+  const seen = st.events.slice(0, shown.current);
+  const bigCount = seen.reduce((n, e) => n + (e.big ? 1 : 0), 0);
+  // raise the banner only when a goal the manager can actually see has landed
   useEffect(() => {
     if (bigCount > lastGoal.current) {
       lastGoal.current = bigCount;
-      const goals = st.events.filter(e => e.big);
+      const goals = seen.filter(e => e.big);
       setFlash(goals[goals.length - 1]);
     }
-  }, [bigCount, st.events]);
+  }, [bigCount, seen]);
   // and lower it on its own timer, decoupled from the per minute re-renders
   useEffect(() => {
     if (!flash) return;
@@ -164,7 +219,7 @@ export function MatchBroadcast({ gs, onDone }: { gs: G.GameState; onDone: (r: Ma
   }, [flash]);
 
   const pending = st.pending;
-  const feed = [...st.events].reverse();
+  const feed = [...seen].reverse();
   const total = 90 + st.addedTime;
 
   return (
@@ -174,7 +229,7 @@ export function MatchBroadcast({ gs, onDone }: { gs: G.GameState; onDone: (r: Ma
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <TeamSide club={homeClub} />
           <div style={{ textAlign: 'center', minWidth: 104 }}>
-            <ScorePair h={st.score[0]} a={st.score[1]} size={44} />
+            <ScorePair h={shownScore.current[0]} a={shownScore.current[1]} size={44} />
             <div className="pill" style={{
               marginTop: 7,
               background: st.phase === 'done' ? 'rgba(255,255,255,.06)' : 'rgba(226,72,77,.16)',
@@ -216,7 +271,8 @@ export function MatchBroadcast({ gs, onDone }: { gs: G.GameState; onDone: (r: Ma
             </div>
 
             <div style={{ position: 'relative' }}>
-              <LivePitch st={st} home={homeClub} away={awayClub} myId={myId} />
+              <LivePitch st={st} home={homeClub} away={awayClub} myId={myId}
+                play={play} onPlayed={id => { if (playSeq.current === id) reveal(); }} />
               {flash && <GoalFlash ev={flash} mine={flash.teamId === myId} overlay />}
             </div>
 

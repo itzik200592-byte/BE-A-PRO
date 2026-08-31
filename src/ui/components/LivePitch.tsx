@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { LiveState, Side } from '../../game/liveMatch.ts';
 import type { Club } from '../../data/clubs.ts';
 import { formation, fillFormation } from '../../data/formations.ts';
-import { PitchSim, eventToPlay } from '../../game/pitchSim.ts';
+import { PitchSim } from '../../game/pitchSim.ts';
 import type { PitchSlot } from '../../game/pitchSim.ts';
 
 /**
@@ -10,19 +10,38 @@ import type { PitchSlot } from '../../game/pitchSim.ts';
  *
  * All the football lives in game/pitchSim.ts, which is plain data in and plain
  * data out so it can be driven ninety minutes at a time from a Node harness
- * (scripts/pitch-check.mts). This file only wires it to the match: it lines
- * both sides up in the formation their manager picked, feeds commentary events
- * in so a goal on the ticker is a goal on the pitch, and writes the positions
- * straight to the DOM, so a 60fps pitch costs no React renders.
+ * (scripts/pitch-check.mts). This file only wires it to the match.
+ *
+ * The pitch LEADS. It is handed one move at a time through `play` and reports
+ * back through `onPlayed` on the frame the ball arrives; only then does the
+ * screen around it move the score and print the line. It used to be the other
+ * way round, reading the event list itself after the engine had already flipped
+ * the scoreboard, so the banner said GOAL while the ball was still on halfway.
+ *
+ * Positions are written straight to the DOM, so a 60fps pitch costs no React
+ * renders.
  */
+
+/** how many ghosts follow the ball */
+const TRAIL = 7;
 
 const reduceMotion = typeof window !== 'undefined'
   && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club; away: Club; myId: string }) {
+export interface PitchPlay { id: number; home: boolean; scored: boolean }
+
+export function LivePitch({ st, home, away, myId, play = null, onPlayed }: {
+  st: LiveState; home: Club; away: Club; myId: string;
+  /** the move the pitch should act out next, or null when there is nothing on */
+  play?: PitchPlay | null;
+  /** called on the frame the ball arrives, with the id of the move that ended */
+  onPlayed?: (id: number, scored: boolean) => void;
+}) {
   const wrap = useRef<HTMLDivElement>(null);
   const nodes = useRef(new Map<string, HTMLSpanElement>());
   const ballEl = useRef<HTMLSpanElement>(null);
+  const netEl = useRef<HTMLDivElement>(null);
+  const trailEls = useRef<HTMLSpanElement[]>([]);
   const stRef = useRef(st); stRef.current = st;
 
   const fHome = formation(st.home.tactic.formation);
@@ -32,6 +51,8 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
     ...fillFormation(st.away.onPitch, fAway).map((p, i) => ({ id: `a${p.id}`, home: false, i, fm: fAway })),
   ];
   const slotsRef = useRef(slots); slotsRef.current = slots;
+  const playRef = useRef(play); playRef.current = play;
+  const playedRef = useRef(onPlayed); playedRef.current = onPlayed;
 
   useEffect(() => {
     const el = wrap.current;
@@ -43,12 +64,24 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
 
     const sim = new PitchSim();
     sim.setSlots(slotsRef.current);
-    let seen = stRef.current.events.length;
+
+    // which move is on the pitch right now, so one instruction is acted on once
+    let onPitch: number | null = null;
+    let netFlash = 0;
+    let netRight = true;
+    const trail: { x: number; y: number }[] = [];
+
+    sim.onPlayed = scored => {
+      const id = onPitch; onPitch = null;
+      if (scored) { netFlash = 0.9; netRight = sim.B.x > 0.5; }
+      if (id !== null) playedRef.current?.(id, scored);
+    };
 
     let raf = 0;
+    let stopFallback: (() => void) | null = null;
     let last = performance.now();
 
-    const write = (n: HTMLSpanElement, x: number, y: number, size: number) => {
+    const write = (n: HTMLElement, x: number, y: number, size: number) => {
       n.style.transform = `translate3d(${x * box.w - size / 2}px, ${y * box.h - size / 2}px, 0)`;
     };
 
@@ -61,20 +94,9 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
 
       sim.setSlots(slotsRef.current);
 
-      // A goal in the commentary has to be a goal on the pitch, at the right end.
-      //
-      // `seen` is a read cursor into the event list, and only events past it are
-      // ever acted on. It used to be a length, and the search then ran backwards
-      // over the WHOLE history, so any event at all, an ambient line, a booking,
-      // a substitution, re-fired the most recent goal. Score in the ninth minute
-      // and every commentary line for the rest of the match replayed that goal on
-      // the pitch, which is why goals arrived from nowhere with nothing on the
-      // ticker to match them.
-      if (s.events.length > seen) {
-        const fire = eventToPlay(s.events, seen, s.home.id);
-        seen = s.events.length;
-        if (fire) sim.event(fire.home, fire.scored);
-      }
+      // if the pitch is mid move it refuses, and we simply ask again next frame
+      const want = playRef.current;
+      if (want && want.id !== onPitch && sim.event(want.home, want.scored)) onPitch = want.id;
 
       const all = sim.step(dt, t, s.possession, off);
 
@@ -87,10 +109,42 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
       }
       if (ballEl.current) write(ballEl.current, sim.B.x, sim.B.y, 9);
 
+      // A short comet behind the ball. Six spans, and it is the single thing
+      // that turns a sliding dot into a struck football.
+      trail.unshift({ x: sim.B.x, y: sim.B.y });
+      if (trail.length > TRAIL) trail.length = TRAIL;
+      for (let i = 0; i < trailEls.current.length; i++) {
+        const n = trailEls.current[i], q = trail[i + 1];
+        if (!n) continue;
+        if (!q || off) { n.style.opacity = '0'; continue; }
+        const size = Math.max(2, 8 - i * 0.9);
+        n.style.opacity = String((1 - i / TRAIL) * 0.45);
+        n.style.width = n.style.height = `${size}px`;
+        write(n, q.x, q.y, size);
+      }
+
+      // and the net, when one actually goes in
+      const g = netEl.current;
+      if (g) {
+        if (netFlash > 0) {
+          netFlash = Math.max(0, netFlash - dt);
+          g.style.opacity = String(Math.min(1, netFlash / 0.35));
+          g.style.left = netRight ? 'auto' : '0';
+          g.style.right = netRight ? '0' : 'auto';
+        } else if (g.style.opacity !== '0') g.style.opacity = '0';
+      }
+
       raf = requestAnimationFrame(frame);
     };
 
     if (reduceMotion) {
+      // Nothing animates, so nothing can report back. Release whatever is handed
+      // in, otherwise the scoreboard waits on a frame that never comes.
+      const rel = window.setInterval(() => {
+        const w = playRef.current;
+        if (w && w.id !== onPitch) { onPitch = w.id; playedRef.current?.(w.id, w.scored); }
+      }, 150);
+      stopFallback = () => window.clearInterval(rel);
       for (const sl of slotsRef.current) {
         const node = nodes.current.get(sl.id);
         const slot = sl.fm.slots[sl.i] ?? sl.fm.slots[sl.fm.slots.length - 1];
@@ -100,7 +154,7 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
     } else {
       raf = requestAnimationFrame(frame);
     }
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); stopFallback?.(); };
   }, [myId]);
 
   return (
@@ -125,6 +179,22 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
         <rect x="98" y="27" width="1.6" height="8" fill="rgba(255,255,255,.5)" />
       </svg>
 
+      {/* the goal that just went in, lit on the side the ball is on */}
+      <div ref={netEl} aria-hidden="true" style={{
+        position: 'absolute', top: '38%', bottom: '38%', width: '8%', right: 0,
+        background: 'linear-gradient(90deg,rgba(255,255,255,.95),rgba(255,255,255,.1))',
+        opacity: 0, zIndex: 1, pointerEvents: 'none', filter: 'blur(2px)',
+      }} />
+
+      {Array.from({ length: TRAIL - 1 }, (_, i) => (
+        <span key={`t${i}`} aria-hidden="true"
+          ref={n => { if (n) trailEls.current[i] = n; }}
+          style={{
+            position: 'absolute', left: 0, top: 0, width: 7, height: 7, borderRadius: '50%',
+            background: '#fff', opacity: 0, willChange: 'transform,opacity', zIndex: 2,
+          }} />
+      ))}
+
       {slots.map(sl => {
         const side: Side = sl.home ? st.home : st.away;
         const club = sl.home ? home : away;
@@ -136,7 +206,7 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
               width: me ? 13 : 11, height: me ? 13 : 11, borderRadius: '50%',
               background: club.primary, border: `1.5px solid ${me ? '#fff' : 'rgba(0,0,0,.45)'}`,
               boxShadow: me ? '0 0 7px rgba(255,255,255,.5)' : '0 1px 3px rgba(0,0,0,.5)',
-              willChange: 'transform', zIndex: 2,
+              willChange: 'transform', zIndex: 3,
             }} />
         );
       })}
@@ -144,7 +214,7 @@ export function LivePitch({ st, home, away, myId }: { st: LiveState; home: Club;
       <span ref={ballEl} aria-hidden="true" style={{
         position: 'absolute', left: 0, top: 0, width: 9, height: 9, borderRadius: '50%',
         background: '#fff', border: '1px solid rgba(0,0,0,.55)',
-        boxShadow: '0 0 8px rgba(255,255,255,.8)', willChange: 'transform', zIndex: 3,
+        boxShadow: '0 0 8px rgba(255,255,255,.8)', willChange: 'transform', zIndex: 4,
       }} />
     </div>
   );

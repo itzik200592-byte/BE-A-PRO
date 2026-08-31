@@ -94,6 +94,14 @@ export class PitchSim {
   readonly pos = new Map<string, Pt>();
   slots: PitchSlot[] = [];
   trace: PitchTrace | null = null;
+  /**
+   * Fired the instant a scripted move finishes, the ball in the net or the
+   * chance gone. The scoreboard and the commentary wait for this, so what the
+   * manager reads always matches what he is watching. Without it the engine
+   * flipped the score the moment it decided a goal, and the pitch was still
+   * building the move: "goal" on the banner, ball on the halfway line.
+   */
+  onPlayed: ((scored: boolean) => void) | null = null;
   rnd: () => number = Math.random;
 
   playX = 0.5;
@@ -111,6 +119,8 @@ export class PitchSim {
     script: null as null | { scored: boolean; home: boolean },
     restartFor: null as null | boolean,   // who kicks off after a goal
     build: 0,                       // passes left to walk a scripted move up the pitch
+    // a scripted shot is in the air; when it lands the scoreboard is allowed to move
+    settle: null as null | { scored: boolean },
     corners: 0,                     // consecutive corners, so one end cannot hog the game
     surge: 0, surgeHome: true,      // bodies into the box for a corner
   };
@@ -193,13 +203,15 @@ export class PitchSim {
    * act() walks the ball up in ordinary passes and only shoots once it is
    * actually near the goal, so the caption and the pitch tell the same story.
    */
-  event(forHome: boolean, scored: boolean) {
+  event(forHome: boolean, scored: boolean): boolean {
     const B = this.B;
+    if (B.script || B.settle) return false;     // one move at a time, the caller retries
     B.script = { scored, home: forHome };
-    B.build = 4;                  // passes allowed to get there, then he shoots
+    B.build = 3;                  // passes allowed to get there, then he shoots
     B.surge = 1; B.surgeHome = forHome;
     // a beat, so the move starts from the next decision rather than mid flight
     if (!B.fly) B.until = Math.min(B.until, 0);
+    return true;
   }
 
   /**
@@ -261,6 +273,7 @@ export class PitchSim {
       B.script = null; B.build = 0;
       const plan = this.aimShot(sc.home, { x: B.x, y: B.y }, sc.scored);
       this.trace?.onShot?.(B.x, plan.after, plan.tx, plan.ty, sc.home);
+      B.settle = { scored: sc.scored };
       this.kick(plan.tx, plan.ty, plan.sp + 0.3, null, plan.after);
       return;
     }
@@ -382,6 +395,9 @@ export class PitchSim {
   private land(t: number) {
     const B = this.B, rnd = this.rnd;
     B.fly = false;
+    // the ball has arrived. If this was the shot the commentary was waiting on,
+    // that is the frame the score is allowed to change on, not a beat earlier
+    if (B.settle) { const st = B.settle; B.settle = null; this.onPlayed?.(st.scored); }
     if (B.after === 'corner') {                     // shot went out, corner kick
       B.after = ''; B.surgeHome = B.x > 0.5; B.surge = 1; B.corners++;
       this.kick(B.x > 0.5 ? 0.975 : 0.025, rnd() < 0.5 ? 0.045 : 0.955, 1.2, null, 'cross');
