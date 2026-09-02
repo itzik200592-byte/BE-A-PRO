@@ -2,13 +2,13 @@ import type { Club } from '../data/clubs.ts';
 import type { ManagerId, ManagerType } from '../data/managers.ts';
 import { getManager } from '../data/managers.ts';
 import type { Squad } from '../data/squadGen.ts';
-import { playerValue } from '../data/squadGen.ts';
+import { playerValue, squadAvgOvr } from '../data/squadGen.ts';
 import type { MatchResult, TeamInput, Approach, Press, Player, Position, Rng } from '../engine/matchEngine.ts';
 import { simulateMatch, overall, createRng } from '../engine/matchEngine.ts';
 import type { LeagueState, Fixture } from './league.ts';
 import { initLeague, applyResult, sortedTable, buildFixtures, emptyTable } from './league.ts';
 import { LEAGUE_C, isDerby, LEAGUE_NAMES, setDerbies, derbiesFromClubs } from '../data/clubs.ts';
-import { buildRegionLeague } from '../data/cities.ts';
+import { buildRegionLeague, buildSiblingLeague, siblingClub } from '../data/cities.ts';
 import { debtState, debtLine } from './finance.ts';
 import { sponsorOffers, signSponsor, sponsorRound } from './sponsor.ts';
 import type { Sponsor, SponsorOffer, SponsorId } from './sponsor.ts';
@@ -59,11 +59,29 @@ export type Phase =
   | 'onboard-archetype' | 'onboard-manager' | 'onboard-club' | 'signing' | 'squad' | 'hub' | 'transfers'
   | 'dilemma' | 'tactic' | 'vs' | 'match' | 'result' | 'press' | 'season-end' | 'chronicle'
   | 'captain' | 'assistant' | 'coach' | 'preseason' | 'preseason-market' | 'inbox' | 'chat' | 'table' | 'stadium'
-  | 'packs' | 'sacked' | 'sponsor';
+  | 'packs' | 'sacked' | 'sponsor' | 'ultimatum' | 'rescue';
 
 export type MarketLine = 'gk' | 'def' | 'mid' | 'atk';
 
 export interface Meters { money: number; morale: number; prestige: number; }
+
+/**
+ * The club that sacked you, pinned to the division it was in.
+ *
+ * It does not move while you are gone. You drop a level, take the other club in
+ * the same town, and if you climb back you walk into the same league as the
+ * people who let you go, with the derby already written. That is the whole point
+ * of being sacked here: it is not an ending, it is the start of the grudge.
+ */
+export interface Nemesis {
+  clubId: string;
+  name: string;
+  short: string;
+  city: string;
+  /** the division they stay in until you get back to it */
+  tier: number;
+  season: number;
+}
 
 /** The day it ended, kept so the letter can say what actually happened. */
 export interface Sacking {
@@ -73,7 +91,12 @@ export interface Sacking {
   week: number;
   season: number;
   league: string;
+  /** who let you go, kept whole so the club across town can be found */
+  clubId: string;
   club: string;
+  short: string;
+  city: string;
+  tier: number;
   position: number;
   teams: number;
 }
@@ -174,6 +197,10 @@ export interface GameState {
   sacking: Sacking | null;
   /** the shirt deal for this season, re-negotiated every summer */
   sponsor: Sponsor | null;
+  /** the club that let you go, waiting a division above until you climb back */
+  nemesis: Nemesis | null;
+  /** the season the owner delivered his ultimatum, so it is delivered once */
+  ultimatumSeason: number | null;
   style: ManagerStyle;
   /** per player season record for the whole division, drives the charts */
   seasonStats: Record<string, PlayerSeason>;
@@ -265,6 +292,8 @@ export function newGame(seed = 12345): GameState {
     press: null,
     sacking: null,
     sponsor: null,
+    nemesis: null,
+    ultimatumSeason: null,
     style: { players: 0, media: 0, money: 0 },
     seasonStats: {},
     careerStats: {},
@@ -382,6 +411,132 @@ export function pickClub(gs: GameState, clubId: string): GameState {
     },
     market: makeMarket(c.tier, rng, 12, takenNames),
     phase: 'onboard-archetype',
+  };
+}
+
+/* ------------------------------------------------ sacked, and the way back */
+
+/** Who is on the phone the morning after, and what they are asking. */
+export interface RescueOffer {
+  club: Club;
+  /** the division they are in, one below the club that let you go */
+  tier: number;
+  league: string;
+  /** the full name, since both clubs in a town share the short one */
+  nemesisName: string;
+  nemesisLeague: string;
+  city: string;
+  /** true when the sacking was in the bottom division and there is no lower one */
+  sameLeague: boolean;
+}
+
+/**
+ * The club across town, a division below, calling the morning after.
+ *
+ * Every Israeli city has two clubs and they cannot stand each other, so the
+ * people who never liked your old employer are exactly the people who want the
+ * man he just threw out. Take it, drag them up, and the season after that you
+ * are in his league with a derby circled on the calendar.
+ */
+export function rescueOffer(gs: GameState): RescueOffer | null {
+  const s = gs.sacking;
+  if (!s) return null;
+  const tier = Math.max(1, s.tier - 1);
+  const club = siblingClub(s.city, tier, s.clubId);
+  return {
+    club, tier, league: LEAGUE_NAMES[tier],
+    nemesisName: s.club, nemesisLeague: s.league,
+    city: s.city, sameLeague: tier === s.tier,
+  };
+}
+
+/**
+ * Take it. A new club, a new division, the same manager: the badge, the money
+ * and the table start again, while the profile, the coach and the whole
+ * chronicle carry over, because the story is his and not the club's.
+ */
+export function takeRescue(gs: GameState): GameState {
+  const offer = rescueOffer(gs);
+  const s = gs.sacking;
+  if (!offer || !s) return gs;
+  const seed = gs.seasonSeed + gs.season * 131 + 17;
+  const region = buildSiblingLeague(s.city, offer.tier, s.clubId);
+  const nemesis: Nemesis = {
+    clubId: s.clubId, name: s.club, short: s.short, city: s.city, tier: s.tier, season: s.season,
+  };
+  let league = initLeague(region.clubs, seed);
+
+  // Sacked in the bottom division there is nothing below it, so the club across
+  // town is in the same league and the derby is this season rather than the one
+  // after. Put him in the division now, since that is what the call promised.
+  let clubs = region.clubs;
+  if (offer.sameLeague) {
+    const staged = { ...gs, clubId: region.myId, nemesis } as GameState;
+    const swap = returnOfTheNemesis(staged, clubs, league.squads, offer.tier);
+    if (swap.met) {
+      clubs = swap.clubs;
+      league = {
+        ...league,
+        clubs,
+        squads: swap.squads,
+        ovr: Object.fromEntries(Object.entries(swap.squads).map(([id, sq]) => [id, squadAvgOvr(sq)])),
+        fixtures: buildFixtures(clubs.map(x => x.id)),
+        table: emptyTable(clubs),
+      };
+    }
+  }
+  setDerbies(derbiesFromClubs(clubs));
+  const c = clubs.find(x => x.id === region.myId)!;
+  const squad = league.squads[region.myId];
+  const rng = createRng(seed + 777);
+  const taken = new Set([...squad.starters, ...squad.bench].map(p => p.name));
+
+  return {
+    ...gs,
+    sacking: null,
+    ultimatumSeason: null,
+    // he does not move while you are away, and the day you get back he is there.
+    // Already in the same division, the account is open on the pitch instead.
+    nemesis: offer.sameLeague ? null : nemesis,
+    clubId: region.myId,
+    league,
+    seasonSeed: seed,
+    season: gs.season + 1,
+    week: 1,
+    meters: {
+      // a club that just called a sacked manager is not a rich club
+      money: cash(START_MONEY * 0.8 * c.traits.budget),
+      morale: meter(58),
+      prestige: meter(Math.max(18, gs.meters.prestige - 8)),
+    },
+    market: makeMarket(offer.tier, rng, 12, taken),
+    marketFocus: null,
+    sponsor: null,
+    stadium: { capacity: STADIUM_START, project: null },
+    stadiumReveal: null,
+    lastLedger: null,
+    lastPlayerMatch: null,
+    lastRound: [],
+    form: [],
+    seasonStats: {},
+    seasonOver: false,
+    contracts: {},
+    captainId: null,
+    dilemma: null,
+    inbox: [],
+    press: null,
+    chat: null,
+    pendingOutcome: null,
+    chronicle: [...gs.chronicle, {
+      id: `rescue-s${gs.season}`,
+      kind: 'sacked' as const,
+      week: 0,
+      title: `${c.name} התקשרו`,
+      body: `הקבוצה השנייה ב${s.city}, זאת שתמיד הייתה בצל של ${s.short}, רצתה דווקא את מי ש${s.short} זרקו. ${LEAGUE_NAMES[offer.tier]}, מהתחלה, ועם חשבון פתוח.`,
+      icon: 'flag' as const,
+      tint: 'gold' as const,
+    }],
+    phase: 'sponsor',
   };
 }
 
@@ -1663,7 +1818,7 @@ export function commitRound(gs: GameState, playerResult: MatchResult): GameState
   const newEntries = chronicleAfterRound(gs, nextBase, playerResult);
   const extra = built.done ? [built.done, ...newEntries] : newEntries;
   const withChron = extra.length ? { ...nextBase, chronicle: [...nextBase.chronicle, ...extra] } : nextBase;
-  return checkTheBooks(withChron);
+  return checkTheBooks(withChron, !won && !draw);
 }
 
 /**
@@ -1671,16 +1826,20 @@ export function commitRound(gs: GameState, playerResult: MatchResult): GameState
  * there is no appeal and no waiting for the season to end: the result screen
  * still shows, and the letter is waiting behind it.
  */
-function checkTheBooks(gs: GameState): GameState {
+function checkTheBooks(gs: GameState, lost: boolean): GameState {
   if (gs.sacking) return gs;
   const d = debt(gs);
-  if (d.level !== 'sacked') return gs;
+  // An owner does not sack a manager on a Tuesday because of a spreadsheet. He
+  // waits for a defeat and uses it. Past the line and still winning, you keep
+  // your job another week, which is the difference between a rule and a story.
+  if (d.level !== 'sacked' || !lost) return gs;
   const c = club(gs);
   const table = sortedTable(gs.league);
   const sacking: Sacking = {
     reason: 'debt', debt: d.debt, limit: d.limit,
     week: gs.week, season: gs.season,
-    league: LEAGUE_NAMES[c.tier], club: c.name,
+    league: LEAGUE_NAMES[c.tier],
+    clubId: c.id, club: c.name, short: c.short, city: c.city, tier: c.tier,
     position: Math.max(1, table.findIndex(x => x.clubId === gs.clubId) + 1),
     teams: table.length,
   };
@@ -1704,6 +1863,10 @@ export function continueFromResult(gs: GameState): GameState {
   gs = { ...gs, stadiumReveal: null };   // the unveil has had its moment
   // no press room, no next week: the owner is waiting
   if (gs.sacking) return { ...gs, phase: 'sacked', press: null, chat: null };
+  // the warning he gets before it, delivered once, in person
+  if (debt(gs).level === 'final' && gs.ultimatumSeason !== gs.season) {
+    return { ...gs, phase: 'ultimatum', ultimatumSeason: gs.season, press: null, chat: null };
+  }
   const r = gs.lastPlayerMatch;
   const fx = playerFixture(gs);
   if (!r || !fx) return advancePastPress(gs);
@@ -1767,7 +1930,8 @@ function endOfWeek(gs: GameState): GameState {
  * about: a hammering either way, a derby, or a run of three. Anything else and
  * we go straight home, which is what keeps the buzz meaningful.
  */
-function advancePastPress(gs: GameState): GameState {
+/** Carry on into the press room and the rest of the week. */
+export function advancePastPress(gs: GameState): GameState {
   const r = gs.lastPlayerMatch;
   const fx = playerFixture(gs);
   if (!r || !fx) return endOfWeek(gs);
@@ -1911,17 +2075,27 @@ export function startNextSeason(gs: GameState): GameState {
   });
 
   // the whole division carries forward, aged, rather than being regenerated
+  // The day you climb back into his division, he is in it, and he is your derby.
+  // Being sacked is not an ending here, it is the opening of an account, and
+  // this is where it gets settled.
+  // Read the tier the club actually landed on rather than working it out from
+  // the result: a champion whose promotion was blocked by a small ground does
+  // not go up, and duplicating that rule here had the nemesis appearing in a
+  // division the manager had not reached.
+  const myNewTier = next.clubs.find(c => c.id === gs.clubId)?.tier ?? myClub.tier;
+  const back = returnOfTheNemesis(gs, next.clubs, next.squads, myNewTier);
+
   const league: LeagueState = {
-    clubs: next.clubs,
-    squads: next.squads,
+    clubs: back.clubs,
+    squads: back.squads,
     ovr: Object.fromEntries(
-      Object.entries(next.squads).map(([id, sq]) => [
+      Object.entries(back.squads).map(([id, sq]) => [
         id, Math.round(sq.starters.reduce((s, p) => s + overall(p), 0) / sq.starters.length),
       ]),
     ),
-    fixtures: buildFixtures(next.clubs.map(c => c.id)),
-    table: emptyTable(next.clubs),
-    rounds: (next.clubs.length - 1) * 2,
+    fixtures: buildFixtures(back.clubs.map(c => c.id)),
+    table: emptyTable(back.clubs),
+    rounds: (back.clubs.length - 1) * 2,
   };
   // keep the derby registry in step with whoever is in the division now
   setDerbies(derbiesFromClubs(league.clubs));
@@ -1993,7 +2167,18 @@ export function startNextSeason(gs: GameState): GameState {
     dilemma: null,
     pendingOutcome: null,
     press: null,
-    chronicle: [...gs.chronicle, ...seasonChronicle(gs, report, myClub.short)],
+    chronicle: [...gs.chronicle, ...seasonChronicle(gs, report, myClub.short),
+      ...(back.met && gs.nemesis ? [{
+        id: `nemesis-s${gs.season}`,
+        kind: 'sacked' as const,
+        week: 0,
+        title: `חזרת לליגה של ${gs.nemesis.short}`,
+        body: `הם פיטרו אותך בעונה ${gs.nemesis.season}, ומאז לא זזו משם. עכשיו אתם באותה ליגה, ויש דרבי.`,
+        icon: 'flame' as const,
+        tint: 'gold' as const,
+      }] : [])],
+    // the account is settled the moment you are back in his league
+    nemesis: back.met ? null : gs.nemesis,
     // climbing a division is the milestone the premium currency is pinned to,
     // and the ad allowance refills with the new season
     gems: gs.gems + (r.result === 'champion' || r.result === 'promoted' ? GEMS_ON_PROMOTION : 0),
@@ -2001,6 +2186,39 @@ export function startNextSeason(gs: GameState): GameState {
     pull: null,
     coach: { ...gs.coach, seasons: gs.coach.seasons + 1 },
   };
+}
+
+/**
+ * Put the club that sacked you back in front of you, the season you reach the
+ * division they never left. The weakest side in the new league steps aside and
+ * hands over its squad, so the table size and the fixture list are untouched,
+ * and the two of them are written into each other's rivalId, which is what the
+ * derby chip on the match card reads.
+ */
+function returnOfTheNemesis(
+  gs: GameState, clubs: Club[], squads: Record<string, Squad>, myTier: number,
+): { clubs: Club[]; squads: Record<string, Squad>; met: boolean } {
+  const n = gs.nemesis;
+  if (!n || myTier !== n.tier) return { clubs, squads, met: false };
+  if (clubs.some(c => c.id === n.clubId)) return { clubs, squads, met: false };
+
+  const mine = clubs.find(c => c.id === gs.clubId);
+  // the side that makes way is the weakest one that is not yours
+  const others = clubs.filter(c => c.id !== gs.clubId);
+  if (!others.length || !mine) return { clubs, squads, met: false };
+  const ovrOf = (c: Club) => {
+    const sq = squads[c.id];
+    if (!sq?.starters?.length) return 0;
+    return sq.starters.reduce((t, p) => t + overall(p), 0) / sq.starters.length;
+  };
+  const out = others.reduce((a, b) => (ovrOf(b) < ovrOf(a) ? b : a));
+  const him = { ...siblingClub(n.city, n.tier, gs.clubId), id: n.clubId, name: n.name, short: n.short, city: n.city, tier: n.tier, rivalId: gs.clubId };
+
+  const nextClubs = clubs.map(c => (c.id === out.id ? him : c.id === gs.clubId ? { ...c, rivalId: n.clubId } : c));
+  const nextSquads: Record<string, Squad> = { ...squads };
+  nextSquads[n.clubId] = squads[out.id];
+  delete nextSquads[out.id];
+  return { clubs: nextClubs, squads: nextSquads, met: true };
 }
 
 /** The promotion or relegation itself is a chapter worth keeping. */

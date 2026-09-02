@@ -340,6 +340,54 @@ export function nearestCities(city: City, n: number): City[] {
  * seven nearest, each a real club, with the closest neighbour set as your
  * derby. This is what makes ליגה ג׳ feel like your actual corner of the map.
  */
+/**
+ * The other club in the same town.
+ *
+ * Every Israeli city of any size has two, and they hate each other. When an
+ * owner sacks you, the club across town is the one that calls: a division
+ * below, in trouble, and very interested in the man who just walked out of
+ * their rivals' office. It keeps the same city so the derby that follows means
+ * something, and takes a different prefix and different colours so nobody
+ * mistakes one for the other.
+ */
+export function siblingClub(cityName: string, tier: number, avoidId: string): Club {
+  const city = findCity(cityName) ?? CITIES[0];
+  const first = clubFromCity(city, tier);
+  const h = hash(`${city.name}~across`);
+  // a prefix the club across town is not already using
+  const taken = first.name.split(' ')[0];
+  const pool = PREFIX_POOL.filter(x => x !== taken);
+  const prefix = pool[h % pool.length];
+  const pal = PALETTE[(h >>> 3) % PALETTE.length];
+  const name = `${prefix} ${city.name}`;
+  const id = `${cityClubId(name)}x`;
+  return {
+    ...first,
+    id: id === avoidId ? `${id}2` : id,
+    name, short: city.name,
+    primary: pal[0], secondary: pal[1], accent: pal[2],
+    shape: SHAPES[(h >>> 6) % SHAPES.length],
+    pattern: PATTERNS[(h >>> 9) % PATTERNS.length],
+    founded: 1948 + (h % 55),
+    tier,
+    rivalId: avoidId,
+    blurb: 'הקבוצה השנייה בעיר, זאת שתמיד הייתה בצל.',
+  };
+}
+
+/**
+ * The division the sibling plays in: the same region, one level down, with the
+ * club across town in it instead of the one that just sacked you.
+ */
+export function buildSiblingLeague(cityName: string, tier: number, avoidId: string): { clubs: Club[]; myId: string; derbyId: string } {
+  const built = buildRegionLeague(cityName, tier);
+  const mine = siblingClub(cityName, tier, avoidId);
+  const clubs = built.clubs.map(c => (c.id === built.myId ? mine : c));
+  // the town's other club is the local rival for everyone who had the old one
+  for (const c of clubs) if (c.rivalId === built.myId) c.rivalId = mine.id;
+  return { clubs, myId: mine.id, derbyId: clubs.find(c => c.id !== mine.id)?.id ?? mine.id };
+}
+
 export function buildRegionLeague(cityName: string, tier = 1): { clubs: Club[]; myId: string; derbyId: string } {
   const city = findCity(cityName) ?? CITIES[0];
   // a named rival is always in the division, even if it is not among the seven
