@@ -10,6 +10,11 @@
  *   a brand new career, untouched, must survive season one
  *   a mid table club in any division must not be bankrupted by simply existing
  *
+ * The scripted crisis in ליגה א׳ and the לאומית is switched off here on purpose.
+ * It is a story beat that bankrupts every club by design, and leaving it on
+ * would drown out the thing this file exists to measure: whether the wages,
+ * prizes, gate and sponsor add up on their own.
+ *
  *   node --experimental-strip-types scripts/economy-check.mts
  */
 
@@ -35,6 +40,8 @@ function season(tier: number | null, seed: number, money: number | null) {
   if (tier !== null) {
     gs = { ...gs, league: { ...gs.league, clubs: gs.league.clubs.map(c => c.id === gs.clubId ? { ...c, tier } : c) } };
   }
+  // the scripted collapse is not what is being measured here
+  gs = { ...gs, crisisDone: true };
   gs = G.enterSeason(gs);
   if (gs.phase === 'sponsor') gs = G.takeSponsor(gs, 'base');
   if (money !== null) gs = { ...gs, meters: { ...gs.meters, money } };

@@ -49,7 +49,9 @@ export function SigningScreen({ gs, onDone }: {
 
   return (
     <div className="screen pad stack pad-b" style={{ gap: 14, minHeight: '100%' }}>
-      <Stepper current={4} />
+      {/* a rescued manager is not being onboarded, he is signing for a second
+          club mid career, so the tour bar has no business being here */}
+      {!gs.crisisDone && <Stepper current={4} />}
 
       {/* the announcement, over the handshake in the club's old office */}
       <div className="signing-hero" style={{ animation: 'pop .45s var(--ease-out)' }}>

@@ -16,7 +16,8 @@
     "check:debt": "node --experimental-strip-types scripts/debt-check.mts",
     "check:economy": "node --experimental-strip-types scripts/economy-check.mts",
     "check:climb": "node --experimental-strip-types scripts/climb-check.mts",
-    "check:sacking": "node --experimental-strip-types scripts/sacking-arc.mts"
+    "check:sacking": "node --experimental-strip-types scripts/sacking-arc.mts",
+    "check:guaranteed": "node --experimental-strip-types scripts/guaranteed-sack.mts"
   },
   "dependencies": {
     "react": "^18.3.1",

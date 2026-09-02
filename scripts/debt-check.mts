@@ -46,6 +46,7 @@ function career(startMoney: number, reckless = false, seasons = 1, tier = 1) {
   gs = { ...gs, meters: { ...gs.meters, money: startMoney } };
 
   const seen = new Set<string>();
+  let warned = false;
   let rounds = 0;
   for (let season = 1; season <= seasons && !gs.sacking; season++) {
   if (season > 1) {
@@ -73,12 +74,14 @@ function career(startMoney: number, reckless = false, seasons = 1, tier = 1) {
     gs = G.commitRound(gs, res);
     rounds++;
     gs = G.continueFromResult(gs);
+    // the owner has a word before the axe, and the loop has to let him say it
+    if (gs.phase === 'ultimatum') { warned = true; gs = G.advancePastPress(gs); }
     if (gs.phase === 'press') gs = G.answerPress(gs, 0);
     if (gs.phase === 'chat') gs = G.closeChat(gs);
     if (gs.phase === 'season-end') break;
   }
   }
-  return { gs, seen, rounds };
+  return { gs, seen, warned, rounds };
 }
 
 // The realistic sack: a club that goes up and cannot carry the division it
@@ -96,7 +99,10 @@ if (doomed.gs.sacking) {
   check('the letter records the debt', s.debt >= s.limit, `${s.debt} vs ${s.limit}`);
   check('the letter records where you were', s.position >= 1 && s.position <= s.teams, `${s.position}/${s.teams}`);
   check('it is written into the chronicle', doomed.gs.chronicle.some(c => c.kind === 'sacked'));
-  check('you were warned before it', doomed.seen.has('warned') || doomed.seen.has('final'),
+  // the owner says it to his face, which is the promise. The level ladder is not
+  // the test: the scripted crisis jumps from watched straight past the line in
+  // one round, and the warning still has to arrive before the axe.
+  check('the owner warned him to his face first', doomed.warned,
     [...doomed.seen].join(' -> '));
 }
 

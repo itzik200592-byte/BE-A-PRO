@@ -9,7 +9,7 @@ import type { LeagueState, Fixture } from './league.ts';
 import { initLeague, applyResult, sortedTable, buildFixtures, emptyTable } from './league.ts';
 import { LEAGUE_C, isDerby, LEAGUE_NAMES, setDerbies, derbiesFromClubs } from '../data/clubs.ts';
 import { buildRegionLeague, buildSiblingLeague, siblingClub } from '../data/cities.ts';
-import { debtState, debtLine } from './finance.ts';
+import { debtState, debtLine, debtLimit } from './finance.ts';
 import { sponsorOffers, signSponsor, sponsorRound } from './sponsor.ts';
 import type { Sponsor, SponsorOffer, SponsorId } from './sponsor.ts';
 export type { Sponsor, SponsorOffer, SponsorId };
@@ -201,6 +201,10 @@ export interface GameState {
   nemesis: Nemesis | null;
   /** the season the owner delivered his ultimatum, so it is delivered once */
   ultimatumSeason: number | null;
+  /** the club's money has already collapsed once, and it only happens once */
+  crisisDone: boolean;
+  /** what actually happened to the money, for the owner to explain */
+  crisisReason: string | null;
   style: ManagerStyle;
   /** per player season record for the whole division, drives the charts */
   seasonStats: Record<string, PlayerSeason>;
@@ -294,6 +298,8 @@ export function newGame(seed = 12345): GameState {
     sponsor: null,
     nemesis: null,
     ultimatumSeason: null,
+    crisisDone: false,
+    crisisReason: null,
     style: { players: 0, media: 0, money: 0 },
     seasonStats: {},
     careerStats: {},
@@ -536,12 +542,17 @@ export function takeRescue(gs: GameState): GameState {
       icon: 'flag' as const,
       tint: 'gold' as const,
     }],
-    phase: 'sponsor',
+    // the same welcome the first club got: the announcement, the badge and the
+    // first question from the press. A new club is a new beginning or it is not one.
+    phase: 'signing',
   };
 }
 
 /** Signing done, now go and look at the squad you inherited. */
 export function afterSigning(gs: GameState, effect: { morale?: number; prestige?: number }): GameState {
+  // A rescued manager has already met a squad and run a club. He does not need
+  // the onboarding tour again, he needs somebody on the shirt.
+  const next = gs.crisisDone ? 'sponsor' as const : 'squad' as const;
   return {
     ...gs,
     meters: {
@@ -550,7 +561,7 @@ export function afterSigning(gs: GameState, effect: { morale?: number; prestige?
       prestige: meter(gs.meters.prestige + (effect.prestige ?? 0)),
     },
     style: scoreStyle(gs.style, effect),
-    phase: 'squad',
+    phase: next,
   };
 }
 
@@ -989,6 +1000,44 @@ export function seasonGoal(gs: GameState): SeasonGoal {
   }
 
   return { pos, teams, pts: me.pts, played: me.played, left, zone, target, line, blocked, up, down };
+}
+
+/**
+ * The season the money goes.
+ *
+ * Every manager gets sacked once, and it happens in ליגה א׳ or the לאומית,
+ * because that is where the wage bill outgrows the club. It is not a punishment
+ * for playing badly: the club's money collapses under him, the way it does at
+ * that level in Israel every other year. The owner explains it to his face, and
+ * then the ordinary rules take over: a warning, and the next defeat.
+ *
+ * The debt is imposed past the line rather than near it, because a manager who
+ * could sell his way out of it would never see the rest of the story.
+ */
+const CRISIS_TIERS = [3, 4];
+const CRISIS_WEEK = 4;
+
+const CRISIS_REASONS = [
+  'העסק של הבעלים קרס, והחשבון של המועדון הלך איתו.',
+  'הגיע חוב מס משנים שלפניך, והוא נחת עליך.',
+  'הספונסר הראשי ביטל את החוזה באמצע העונה ולקח את הכסף בחזרה.',
+  'הבעלים משך את ההשקעה כדי לכסות חובות אחרים שלו.',
+];
+
+/** Has the money already gone, or is this the round it goes? */
+function maybeCrisis(gs: GameState): GameState {
+  if (gs.crisisDone) return gs;
+  const t = club(gs).tier;
+  if (!CRISIS_TIERS.includes(t) || gs.week < CRISIS_WEEK) return gs;
+  const reason = CRISIS_REASONS[Math.abs(gs.seasonSeed + gs.season) % CRISIS_REASONS.length];
+  // straight past what the owner will carry, so there is no trading out of it
+  const hole = -Math.round(debtLimit(t) * 1.5);
+  return {
+    ...gs,
+    crisisDone: true,
+    crisisReason: reason,
+    meters: { ...gs.meters, money: cash(Math.min(gs.meters.money, hole)) },
+  };
 }
 
 /** The books as the owner sees them, and how close he is to acting. */
@@ -1818,7 +1867,10 @@ export function commitRound(gs: GameState, playerResult: MatchResult): GameState
   const newEntries = chronicleAfterRound(gs, nextBase, playerResult);
   const extra = built.done ? [built.done, ...newEntries] : newEntries;
   const withChron = extra.length ? { ...nextBase, chronicle: [...nextBase.chronicle, ...extra] } : nextBase;
-  return checkTheBooks(withChron, !won && !draw);
+  // The crisis lands after the books are read for this round, so the week the
+  // money disappears is never also the week you are sacked. The warning has to
+  // come first, always.
+  return maybeCrisis(checkTheBooks(withChron, !won && !draw));
 }
 
 /**
@@ -1864,7 +1916,8 @@ export function continueFromResult(gs: GameState): GameState {
   // no press room, no next week: the owner is waiting
   if (gs.sacking) return { ...gs, phase: 'sacked', press: null, chat: null };
   // the warning he gets before it, delivered once, in person
-  if (debt(gs).level === 'final' && gs.ultimatumSeason !== gs.season) {
+  const lvl = debt(gs).level;
+  if ((lvl === 'final' || lvl === 'sacked') && gs.ultimatumSeason !== gs.season) {
     return { ...gs, phase: 'ultimatum', ultimatumSeason: gs.season, press: null, chat: null };
   }
   const r = gs.lastPlayerMatch;

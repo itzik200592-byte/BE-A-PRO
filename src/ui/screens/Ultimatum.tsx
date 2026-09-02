@@ -37,8 +37,21 @@ export function UltimatumScreen({ gs, onGo }: { gs: G.GameState; onGo: () => voi
         borderColor: 'color-mix(in srgb, var(--loss) 40%, transparent)',
       }}>
         <div style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--loss)', marginBottom: 7 }}>הבעלים</div>
-        סגרתי את הדלת בכוונה. המועדון במינוס {money(d.debt)}, ואמרתי לך שאני מכסה עד {money(d.limit)}.
-        אנחנו כמעט שם.
+        {gs.crisisReason ? (
+          <>
+            סגרתי את הדלת בכוונה, כי מה שאני עומד להגיד לך לא יוצא מפה.
+            <div style={{ height: 9 }} />
+            <b style={{ color: 'var(--ink)' }}>{gs.crisisReason}</b>
+            <div style={{ height: 9 }} />
+            אנחנו במינוס {money(d.debt)}, ואני יכול לכסות עד {money(d.limit)}. זה לא באשמתך,
+            ואני יודע את זה. אבל אני צריך לתת למישהו תשובה, ואתה המאמן.
+          </>
+        ) : (
+          <>
+            סגרתי את הדלת בכוונה. המועדון במינוס {money(d.debt)}, ואמרתי לך שאני מכסה עד {money(d.limit)}.
+            אנחנו כמעט שם.
+          </>
+        )}
         <div style={{ height: 10 }} />
         אני לא מפטר אותך היום. אבל אני אומר לך בפנים:
         <b style={{ color: 'var(--ink)' }}> ההפסד הבא הוא האחרון שלך.</b> תמכור מי שצריך, תאזן,

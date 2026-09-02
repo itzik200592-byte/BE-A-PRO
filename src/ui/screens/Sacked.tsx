@@ -20,21 +20,24 @@ export function SackedScreen({ gs, onNext }: { gs: G.GameState; onNext: () => vo
 
   return (
     <div className="screen pad stack pad-b" style={{ gap: 14, minHeight: '100%' }}>
+      {/* the photograph is left alone: he is dead centre in it, and any caption
+          laid over the top lands on his face */}
       <div className="sack-photo">
         <img src={asset('/sacked.webp')} alt="" />
         <div className="sack-shade" aria-hidden="true" />
-        <div className="sack-cap">
-          <div className="row" style={{ gap: 9 }}>
-            <Crest club={c} size={30} />
-            <div style={{ minWidth: 0 }}>
-              <div className="label-cap" style={{ letterSpacing: '.14em' }}>{s.league}</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, lineHeight: 1.2 }}>{s.club}</div>
-            </div>
-          </div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, color: 'var(--loss)', marginTop: 8, lineHeight: 1 }}>
+      </div>
+
+      <div className="row" style={{ gap: 11, marginTop: -4 }}>
+        <Crest club={c} size={38} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="label-cap" style={{ letterSpacing: '.14em' }}>{s.league}</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, lineHeight: 1.2 }}>{s.club}</div>
+        </div>
+        <div style={{ textAlign: 'end' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, color: 'var(--loss)', lineHeight: 1 }}>
             פוטרת
           </div>
-          <div className="sub" style={{ fontSize: 13, marginTop: 4 }}>
+          <div className="sub" style={{ fontSize: 12.5, marginTop: 3, whiteSpace: 'nowrap' }}>
             עונה <span className="num">{s.season}</span> · מחזור <span className="num">{s.week}</span>
           </div>
         </div>
@@ -65,8 +68,8 @@ export function SackedScreen({ gs, onNext }: { gs: G.GameState; onNext: () => vo
 
 function Fig({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="stack" style={{ alignItems: 'center', gap: 3, flex: 1, minWidth: 0 }}>
-      <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, color: tone ?? 'var(--ink)' }}>{value}</span>
+    <div className="stack" style={{ alignItems: 'center', gap: 3, flex: 1, minWidth: 0, ...({ '--fig': tone ?? 'var(--ink)' } as React.CSSProperties) }}>
+      <span className="sack-fig">{value}</span>
       <span style={{ fontSize: 11.5, color: 'var(--ink-faint)', fontWeight: 700 }}>{label}</span>
     </div>
   );

@@ -132,7 +132,9 @@ function start(tier: number, money: number): G.GameState {
   check('the sacking is cleared', !gs.sacking);
   check('the club that let you go is remembered', gs.nemesis?.clubId === sackedBy.clubId);
   check('and pinned to the division it was in', gs.nemesis?.tier === sackedBy.tier);
-  check('a new shirt deal is due', gs.phase === 'sponsor', gs.phase);
+  check('the new club signs him, welcome and all', gs.phase === 'signing', gs.phase);
+  gs = G.afterSigning(gs, {});
+  check('and then the shirt is sold', gs.phase === 'sponsor', gs.phase);
   check('the table starts empty', Object.values(gs.league.table).every(t => t.played === 0));
   check('every club in the new league has a squad',
     gs.league.clubs.every(c => (gs.league.squads[c.id]?.starters?.length ?? 0) >= 11));

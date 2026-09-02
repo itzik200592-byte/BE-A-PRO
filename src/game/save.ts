@@ -95,6 +95,8 @@ export function loadCareer(): GameState | null {
     sponsor: s.sponsor ?? null,
     nemesis: s.nemesis ?? null,
     ultimatumSeason: s.ultimatumSeason ?? null,
+    crisisDone: s.crisisDone ?? false,
+    crisisReason: s.crisisReason ?? null,
     chronicle: s.chronicle ?? [],
     chronicleSeen: s.chronicleSeen ?? 0,
     inbox: s.inbox ?? [],
