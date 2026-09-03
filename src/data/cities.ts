@@ -298,6 +298,28 @@ const TIER_ROSTER: Record<number, string[]> = {
 };
 
 /** The clubs of a division above ליגה ג׳, real towns sized to the tier. */
+/**
+ * Clubs from around a town, for a given division.
+ *
+ * A career is rooted in a place, so the division it plays in should be too. Up
+ * to ליגה ב׳ that means the towns nearest home; above it the division has its
+ * own roster of real cities, and home is only a preference inside it.
+ */
+export function regionClubs(cityName: string, tier: number): Club[] {
+  const city = findCity(cityName);
+  if (!city) return cityClubsForTier(tier);
+  if (tier <= 2) {
+    // the neighbours, nearest first, which is who a small club actually plays
+    return nearestCities(city, 14).map(c => clubFromCity(c, tier));
+  }
+  // higher up the division picks itself, but the closest towns come first
+  const roster = cityClubsForTier(tier);
+  return roster
+    .map(c => ({ c, d: (() => { const o = findCity(c.city); return o ? distKm(city, o) : 1e9; })() }))
+    .sort((x, y) => x.d - y.d)
+    .map(x => x.c);
+}
+
 export function cityClubsForTier(tier: number): Club[] {
   const names = TIER_ROSTER[tier] ?? [];
   return names

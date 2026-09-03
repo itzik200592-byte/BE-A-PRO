@@ -10,7 +10,7 @@
 
 import type { Club } from '../data/clubs.ts';
 import { LEAGUE_C, leagueCeiling } from '../data/clubs.ts';
-import { cityClubsForTier } from '../data/cities.ts';
+import { cityClubsForTier, regionClubs } from '../data/cities.ts';
 import type { Squad } from '../data/squadGen.ts';
 import { makePlayer, makeSquad, nextPlayerId } from '../data/squadGen.ts';
 import type { Player, Rng } from '../engine/matchEngine.ts';
@@ -506,6 +506,77 @@ function aiOffSeason(squad: Squad, rng: Rng, tier: number, minSquad: number): Sq
  * whistle of the next: promotion or relegation, the squad a year older, the
  * new division assembled around you.
  */
+/**
+ * Who you line up against next season.
+ *
+ * Staying up, a division does NOT get rebuilt: it is the same clubs you spent a
+ * year learning, minus the two who went up and the one who went down, plus
+ * whoever takes their places. The whole league being replaced every summer was
+ * the single thing that stopped a career feeling like a career, and it also
+ * dropped ליגה ג׳ back to a pool of invented names, so the real towns you chose
+ * at the start simply vanished after one season.
+ *
+ * Moving division is different: that really is a new set of people, and they
+ * come from the same region so the map still means something.
+ */
+function nextDivision(
+  standings: Club[], myClub: Club, newTier: number, oldTier: number,
+  teams: number, homeCity: string | undefined, rng: Rng,
+): Club[] {
+  const want = Math.max(1, teams - 1);
+  const pool = (regionPool(newTier, homeCity)).filter(c => c.id !== myClub.id);
+  const fresh = (taken: Set<string>) => pool.filter(c => !taken.has(c.id));
+
+  if (newTier !== oldTier) {
+    // a different division, so a different set of people, drawn from the region
+    return shuffled(pool, rng).slice(0, want).map(c => ({ ...c, tier: newTier }));
+  }
+
+  // Same division, so it is the same league, and who leaves is decided by where
+  // they finished. Two promotion places and one relegation place, counted among
+  // the clubs that are not you: if you finished top two and the ground kept you
+  // down, that place passes to the next club, which is what actually happens.
+  // Nobody is relegated out of the bottom division, there is nowhere to send them.
+  const others = standings.filter(c => c.id !== myClub.id);
+  const gone = new Set<string>(others.slice(0, 2).map(c => c.id));
+  if (newTier > 1 && others.length) gone.add(others[others.length - 1].id);
+
+  const stayed = others
+    .filter(c => !gone.has(c.id))
+    .map(c => ({ ...c, tier: newTier }));
+
+  // the clubs that just went up or down are not eligible to walk straight back
+  // in as their own replacements, which is how a division could "change" by one
+  const taken = new Set([myClub.id, ...stayed.map(c => c.id), ...gone]);
+  const incoming = shuffled(fresh(taken), rng).slice(0, Math.max(0, want - stayed.length));
+  return [...stayed, ...incoming.map(c => ({ ...c, tier: newTier }))].slice(0, want);
+}
+
+/**
+ * The clubs a division can draw on.
+ *
+ * Real towns only, whenever a town is known. The invented LEAGUE_C names are a
+ * last resort for a career with no city at all, because mixing them in put
+ * "הפועל עין סלע" in a division of real places and quietly threw away the whole
+ * point of picking where you are from.
+ */
+function regionPool(tier: number, homeCity?: string): Club[] {
+  if (!homeCity) return poolForTier(tier);
+  const region = regionClubs(homeCity, tier);
+  if (region.length >= 8) return region;
+  const seen = new Set(region.map(c => c.id));
+  return [...region, ...poolForTier(tier).filter(c => !seen.has(c.id))];
+}
+
+function shuffled<T>(xs: T[], rng: Rng): T[] {
+  const out = [...xs];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 export function buildNextSeason(input: {
   seasonSeed: number;
   season: number;
@@ -514,6 +585,10 @@ export function buildNextSeason(input: {
   myClubId: string;
   /** every squad currently in the division, so the world persists */
   squads: Record<string, Squad>;
+  /** the clubs that just played the season, in finishing order */
+  standings: Club[];
+  /** the town the career is rooted in, so a rebuilt division stays regional */
+  homeCity?: string;
   position: number;
   teams: number;
   minSquad: number;
@@ -542,9 +617,8 @@ export function buildNextSeason(input: {
   const aged = ageSquad(input.squads[myClubId], rng, newTier, input.minSquad,
     input.youthGrowth ?? 1, input.fitnessBonus ?? 0);
 
-  // the division you walk into, with your club taking one of the places
   const myClub: Club = { ...input.myClub, tier: newTier };
-  const others = poolForTier(newTier).filter(c => c.id !== myClub.id).slice(0, Math.max(1, teams - 1));
+  const others = nextDivision(input.standings, myClub, newTier, tier, teams, input.homeCity, rng);
   const clubs = [myClub, ...others];
 
   // Everyone ages, nobody resets. A rival you already know keeps its squad and

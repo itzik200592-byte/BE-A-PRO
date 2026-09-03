@@ -2120,6 +2120,9 @@ export function startNextSeason(gs: GameState): GameState {
     myClub,
     myClubId: gs.clubId,
     squads: gs.league.squads,
+    // who was actually in the division, in finishing order, so it is not rebuilt
+    standings: table.map(row => gs.league.clubs.find(c => c.id === row.clubId)!).filter(Boolean),
+    homeCity: myClub.city,
     position, teams,
     minSquad: MIN_SQUAD,
     stadiumOk: gs.stadium.capacity >= requiredCapacity(myClub.tier + 1),
