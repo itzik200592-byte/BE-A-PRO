@@ -1,4 +1,4 @@
-import type { KitColor } from '../../data/palette.ts';
+import type { Kit as KitStrip } from '../../data/kits.ts';
 
 /**
  * A football shirt, drawn rather than photographed.
@@ -7,26 +7,32 @@ import type { KitColor } from '../../data/palette.ts';
  * front. Drawing it means every colour and every pattern exists for free, the
  * whole set weighs a couple of kilobytes, and no club can ever be missing its
  * artwork, which matters when the town list grows past a thousand.
+ *
+ * It takes a strip, not a club, so the same component draws a home shirt, a
+ * change strip, and whatever a side is actually wearing in a given match.
  */
 
 export type KitPattern = 'solid' | 'stripes' | 'half' | 'sash' | 'hoops';
 
-export function Kit({ color, pattern = 'solid', size = 88, sponsor, away = false }: {
-  color: KitColor;
+let uid = 0;
+
+export function Kit({ kit, pattern = 'solid', size = 88, sponsor, label }: {
+  kit: KitStrip;
   pattern?: KitPattern;
   size?: number;
   /** the shirt front wordmark, once the club has sold the space */
   sponsor?: string;
-  /** an away shirt inverts: the club colour becomes the trim on a neutral body */
-  away?: boolean;
+  /** what a screen reader says; the shirt is decoration without one */
+  label?: string;
 }) {
-  const body = away ? (isLight(color.hex) ? '#1b1f27' : '#f2f5f8') : color.hex;
-  const trim = away ? color.hex : color.trim;
-  const id = `k${color.id}${away ? 'a' : 'h'}${pattern}`;
+  // gradients and clips are referenced by id, so two shirts on one screen must
+  // not share them
+  const id = `k${(uid = (uid + 1) % 100000)}`;
 
   return (
     <svg viewBox="0 0 100 108" width={size} height={size * 1.08}
-      aria-label={`מדי ${away ? 'חוץ' : 'בית'} ${color.name}`}>
+      role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}
+      style={{ display: 'block', flex: 'none' }}>
       <defs>
         {/* the pattern is clipped to the shirt, so stripes stop at the seam */}
         <clipPath id={`${id}-c`}><path d={SHIRT} /></clipPath>
@@ -40,17 +46,17 @@ export function Kit({ color, pattern = 'solid', size = 88, sponsor, away = false
         </linearGradient>
       </defs>
 
-      <path d={SHIRT} fill={body} />
+      <path d={SHIRT} fill={kit.shirt} />
 
       <g clipPath={`url(#${id}-c)`}>
         {pattern === 'stripes' && [12, 28, 44, 60, 76].map(x => (
-          <rect key={x} x={x} y="0" width="8.5" height="108" fill={trim} opacity=".9" />
+          <rect key={x} x={x} y="0" width="8.5" height="108" fill={kit.trim} opacity=".9" />
         ))}
         {pattern === 'hoops' && [20, 42, 64, 86].map(y => (
-          <rect key={y} x="0" y={y} width="100" height="10" fill={trim} opacity=".9" />
+          <rect key={y} x="0" y={y} width="100" height="10" fill={kit.trim} opacity=".9" />
         ))}
-        {pattern === 'half' && <rect x="50" y="0" width="50" height="108" fill={trim} opacity=".9" />}
-        {pattern === 'sash' && <path d="M2 14 L38 4 L98 92 L64 104 Z" fill={trim} opacity=".88" />}
+        {pattern === 'half' && <rect x="50" y="0" width="50" height="108" fill={kit.trim} opacity=".9" />}
+        {pattern === 'sash' && <path d="M2 14 L38 4 L98 92 L64 104 Z" fill={kit.trim} opacity=".88" />}
         <rect x="0" y="0" width="100" height="108" fill={`url(#${id}-sh)`} />
       </g>
 
@@ -60,14 +66,14 @@ export function Kit({ color, pattern = 'solid', size = 88, sponsor, away = false
       <path d="M72 11 Q69 30 73 48" fill="none" stroke="rgba(0,0,0,.16)" strokeWidth="1.2" />
 
       {/* cuffs */}
-      <path d="M3 32 L9 55 L18 52 L12 30 Z" fill={trim} />
-      <path d="M97 32 L91 55 L82 52 L88 30 Z" fill={trim} />
+      <path d="M3 32 L9 55 L18 52 L12 30 Z" fill={kit.trim} />
+      <path d="M97 32 L91 55 L82 52 L88 30 Z" fill={kit.trim} />
 
       {/* a crew collar, stroked along the neckline so it sits like a band */}
-      <path d="M31 9 Q50 25 69 9" fill="none" stroke={trim} strokeWidth="6" strokeLinecap="round" />
+      <path d="M31 9 Q50 25 69 9" fill="none" stroke={kit.trim} strokeWidth="6" strokeLinecap="round" />
 
       {sponsor && (
-        <text x="50" y="62" textAnchor="middle" fill={trim} fontSize="8.5" fontWeight="800"
+        <text x="50" y="62" textAnchor="middle" fill={kit.trim} fontSize="8.5" fontWeight="800"
           letterSpacing="0.3" opacity=".92" style={{ fontFamily: 'inherit' }}>
           {sponsor}
         </text>
@@ -85,11 +91,3 @@ export function Kit({ color, pattern = 'solid', size = 88, sponsor, away = false
  */
 const SHIRT =
   'M31 9 L12 15 L3 32 L9 55 L20 51 L18 52 L21 101 Q50 106 79 101 L82 52 L80 51 L91 55 L97 32 L88 15 L69 9 Q50 25 31 9 Z';
-
-function isLight(hex: string): boolean {
-  let h = hex.replace('#', '');
-  if (h.length === 3) h = h.split('').map(c => c + c).join('');
-  const n = parseInt(h, 16);
-  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.55;
-}

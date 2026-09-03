@@ -19,9 +19,22 @@ export interface Kit {
   trim: string;
 }
 
+/** A home strip from a pair of colours, club or not yet a club. */
+export function homeOf(primary: string, accent: string): Kit {
+  return { shirt: primary, trim: accent };
+}
+
+/**
+ * A change strip from a colour: a light club goes dark and a dark club goes
+ * light, keeping its own colour as the trim so it is still recognisable.
+ */
+export function awayOf(primary: string): Kit {
+  return { shirt: isLight(primary) ? '#f2f5f8' : '#1b1f27', trim: primary };
+}
+
 /** A club's home strip, straight from its identity. */
 export function homeKit(club: Club): Kit {
-  return { shirt: club.primary, trim: club.accent };
+  return homeOf(club.primary, club.accent);
 }
 
 /**
@@ -32,7 +45,7 @@ export function homeKit(club: Club): Kit {
 export function awayKit(club: Club): Kit {
   const explicit = (club as Club & { awayPrimary?: string }).awayPrimary;
   if (explicit) return { shirt: explicit, trim: club.primary };
-  return { shirt: isLight(club.primary) ? '#15181f' : '#eef2f6', trim: club.primary };
+  return awayOf(club.primary);
 }
 
 /**
@@ -47,7 +60,7 @@ export function matchKits(home: Club, away: Club): { home: Kit; away: Kit } {
   const aAway = awayKit(away);
   // if even the away strip clashes (both dark, say), force the light default
   if (clash(h.shirt, aAway.shirt)) {
-    return { home: h, away: { shirt: isLight(h.shirt) ? '#15181f' : '#eef2f6', trim: away.primary } };
+    return { home: h, away: { shirt: isLight(h.shirt) ? '#1b1f27' : '#f2f5f8', trim: away.primary } };
   }
   return { home: h, away: aAway };
 }

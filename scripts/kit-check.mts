@@ -7,6 +7,7 @@ import { matchKits, clash } from '../src/data/kits.ts';
 import { KIT_COLORS, kitColor, nearestKitColor } from '../src/data/palette.ts';
 import { CITIES, clubFromCity } from '../src/data/cities.ts';
 import * as G from '../src/game/state.ts';
+import { readFileSync } from 'node:fs';
 
 const fails: string[] = [];
 
@@ -59,9 +60,42 @@ const own = clubFromCity(city, 1);
 if (def.primary.toLowerCase() !== own.primary.toLowerCase())
   fails.push(`no choice should keep ${own.primary}, got ${def.primary}`);
 
+/* 5. a strip is always two real colours, at every tier */
+for (const tier of [1, 2, 3, 4, 5]) {
+  for (const city of CITIES.slice(0, 20)) {
+    const a = clubFromCity(city, tier);
+    const b = clubFromCity(CITIES[(CITIES.indexOf(city) + 7) % CITIES.length], tier);
+    const k = matchKits(a, b);
+    for (const [who, strip] of [['home', k.home], ['away', k.away]] as const)
+      for (const [part, v] of [['shirt', strip.shirt], ['trim', strip.trim]] as const)
+        if (!/^#[0-9a-fA-F]{3,6}$/.test(String(v)))
+          fails.push(`tier ${tier} ${a.short}: ${who} ${part} is ${v}`);
+  }
+}
+
+/* 6. the header and the pitch cannot disagree, because one call feeds both */
+const twice = [matchKits(clubs[3], clubs[9]), matchKits(clubs[3], clubs[9])];
+if (JSON.stringify(twice[0]) !== JSON.stringify(twice[1]))
+  fails.push('matchKits is not deterministic, so the header could drift from the pitch');
+
+/* 7. the shirt is still on the screens it is meant to be on. A shallow guard:
+      it catches an accidental deletion, not a broken layout. */
+const SHOWN: [string, string][] = [
+  ['src/ui/screens/Hub.tsx', 'the hub identity row'],
+  ['src/ui/screens/Squad.tsx', 'the squad header'],
+  ['src/ui/screens/Match.tsx', 'the match header and the bench'],
+  ['src/ui/screens/Vs.tsx', 'the tunnel'],
+  ['src/ui/screens/Onboard.tsx', 'the colour picker'],
+];
+for (const [file, where] of SHOWN) {
+  const src = readFileSync(file, 'utf8');
+  if (!src.includes('<Kit ')) fails.push(`no shirt on ${where} (${file})`);
+}
+
 console.log(`${pairs} fixtures across ${clubs.length} clubs, ${changed} away changes, 0 unreadable`);
 console.log(`${KIT_COLORS.length} colours chosen through onboarding, each reaching the club`);
 console.log(`no choice keeps the town's own colour (${def.primary})`);
+console.log(`the shirt is on all ${SHOWN.length} screens it belongs on`);
 if (fails.length) console.log('\n  ' + fails.slice(0, 8).join('\n  '));
 console.log(fails.length ? '\nFAIL' : '\nOK, every fixture is two distinct colours and the manager\'s pick sticks');
 process.exit(fails.length ? 1 : 0);

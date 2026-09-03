@@ -7,6 +7,8 @@ import type { MatchResult, Player } from '../../engine/matchEngine.ts';
 import { overall } from '../../engine/matchEngine.ts';
 import type { Club } from '../../data/clubs.ts';
 import { Crest } from '../components/Crest.tsx';
+import { Kit } from '../components/Kit.tsx';
+import { matchKits, type Kit as KitStrip } from '../../data/kits.ts';
 import { ScorePair } from '../components/bits.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Portal } from '../components/Portal.tsx';
@@ -219,6 +221,8 @@ export function MatchBroadcast({ gs, onDone }: { gs: G.GameState; onDone: (r: Ma
   }, [flash]);
 
   const pending = st.pending;
+  // the same two strips the pitch paints its dots with
+  const hdrKits = matchKits(homeClub, awayClub);
   const feed = [...seen].reverse();
   const total = 90 + st.addedTime;
 
@@ -227,7 +231,7 @@ export function MatchBroadcast({ gs, onDone }: { gs: G.GameState; onDone: (r: Ma
       {/* broadcast bar */}
       <div className="tile-hero" style={{ padding: '14px 14px 12px' }}>
         <div className="row" style={{ justifyContent: 'space-between' }}>
-          <TeamSide club={homeClub} />
+          <TeamSide club={homeClub} kit={hdrKits.home} />
           <div style={{ textAlign: 'center', minWidth: 104 }}>
             <ScorePair h={shownScore.current[0]} a={shownScore.current[1]} size={44} />
             <div className="pill" style={{
@@ -242,7 +246,7 @@ export function MatchBroadcast({ gs, onDone }: { gs: G.GameState; onDone: (r: Ma
                 : <span className="num">{st.minute}′{st.minute > 90 ? `+${st.minute - 90}` : ''}</span>}
             </div>
           </div>
-          <TeamSide club={awayClub} />
+          <TeamSide club={awayClub} kit={hdrKits.away} />
         </div>
 
         <div style={{ height: 3, background: 'rgba(255,255,255,.08)', borderRadius: 2, marginTop: 13, overflow: 'hidden' }}>
@@ -322,7 +326,7 @@ export function MatchBroadcast({ gs, onDone }: { gs: G.GameState; onDone: (r: Ma
 
       {/* the bench, opened on demand so it never buries the action */}
       {subOpen && (
-        <SubSheet st={st} focusId={subFocus}
+        <SubSheet st={st} focusId={subFocus} benchKit={st.iAmHome ? hdrKits.home : hdrKits.away}
           onSub={(off, on) => { L.makeSub(st, off, on); force(); }}
           onClose={() => { setSubOpen(false); setSubFocus(null); }} />
       )}
@@ -332,10 +336,13 @@ export function MatchBroadcast({ gs, onDone }: { gs: G.GameState; onDone: (r: Ma
 
 /* ------------------------------------------------------------------ parts */
 
-function TeamSide({ club }: { club: Club }) {
+function TeamSide({ club, kit }: { club: Club; kit?: KitStrip }) {
   return (
-    <div className="stack" style={{ alignItems: 'center', gap: 7, flex: 1 }}>
+    <div className="stack" style={{ alignItems: 'center', gap: 5, flex: 1 }}>
       <Crest club={club} size={42} />
+      {/* the strip they are in today, so the coloured dots on the pitch are
+          immediately readable as one side or the other */}
+      {kit && <Kit kit={kit} size={26} />}
       <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--ink-dim)', textAlign: 'center', lineHeight: 1.2 }}>{club.short}</div>
     </div>
   );
@@ -528,12 +535,16 @@ function BenchBar({ st, onOpen, onQuickSub }: {
  * live fitness and the two tap substitution flow, so the action screen behind
  * it stays clean.
  */
-function SubSheet({ st, onSub, onClose, focusId }: {
-  st: LiveState; onSub: (offId: string, onId: string) => void; onClose: () => void; focusId?: string | null;
+function SubSheet({ st, onSub, onClose, focusId, benchKit }: {
+  st: LiveState; onSub: (offId: string, onId: string) => void; onClose: () => void;
+  focusId?: string | null;
+  /** the strip my side is wearing today, so the bench matches the pitch */
+  benchKit: KitStrip;
 }) {
   const [picked, setPicked] = useState<string | null>(focusId ?? null);
   const side = st.iAmHome ? st.home : st.away;
   const canSub = L.canSub(st) && (st.phase === 'play' || st.phase === 'halftime');
+
 
   return (
     <Portal>
@@ -566,6 +577,9 @@ function SubSheet({ st, onSub, onClose, focusId }: {
               ? <div className="sub" style={{ fontSize: 12, padding: '10px 0', textAlign: 'center', width: '100%' }}>הספסל ריק</div>
               : side.bench.map(p => (
                 <div key={p.id} className="bench-seat" role="listitem">
+                  {/* the substitutes are sitting there in the same shirt as the
+                      eleven on the pitch, which is the whole point of a bench */}
+                  <Kit kit={benchKit} size={26} />
                   <span className="bench-pos">{p.position}</span>
                   <span className="bench-ovr num" style={{ color: ovrColor(overall(p)) }}>{overall(p)}</span>
                   <span className="bench-name">{p.name.split(' ')[0]}</span>

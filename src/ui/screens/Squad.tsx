@@ -7,6 +7,8 @@ import type { Trait } from '../../data/personalities.ts';
 import { headlineTrait, assignTraits, renderLine, TONE_COLOR } from '../../data/personalities.ts';
 import type { Squad } from '../../data/squadGen.ts';
 import { Crest } from '../components/Crest.tsx';
+import { Kit } from '../components/Kit.tsx';
+import { homeKit } from '../../data/kits.ts';
 import { Icon } from '../components/Icon.tsx';
 import { Stepper } from '../components/Stepper.tsx';
 import { CoachGuide } from '../components/CoachGuide.tsx';
@@ -175,7 +177,9 @@ export function SquadScreen({ gs, firstTime, onSwap, onDone }: {
       {firstTime && <CoachGuide text="אלה השחקנים שקיבלת. תכיר אותם טוב, לחץ על כל אחד לכרטיס. איתם אנחנו מתחילים לטפס." />}
       <div className="row" style={{ marginTop: 8 }}>
         <Crest club={c} size={46} />
-        <div style={{ flex: 1 }}>
+        {/* the shirt these players pull on, beside the badge they play for */}
+        <Kit kit={homeKit(c)} size={32} />
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div className="h2">הסגל שלך</div>
           <div className="sub" style={{ fontSize: 14 }}>
             {firstTime ? `${gs.profile.name}, אלה השחקנים שלך. תכיר אותם.` : `${c.name} · ${G.squadSize(gs)} שחקנים`}

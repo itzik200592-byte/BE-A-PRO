@@ -844,3 +844,11 @@ input{font-family:inherit;}
   background:repeating-linear-gradient(90deg,#4a3421 0 44px,#3d2a19 44px 48px);
   border:1px solid rgba(0,0,0,.4); box-shadow:0 3px 6px rgba(0,0,0,.4);
 }
+
+/* the shirt each side runs out in, under the crest on the tunnel screen */
+.vs-kit { display: flex; flex-direction: column; align-items: center; gap: 3px; margin-top: 6px; }
+.vs-kit-note {
+  font-size: 9.5px; font-weight: 800; letter-spacing: .04em;
+  color: var(--ink-faint); background: rgba(255,255,255,.06);
+  border-radius: 5px; padding: 1px 5px;
+}

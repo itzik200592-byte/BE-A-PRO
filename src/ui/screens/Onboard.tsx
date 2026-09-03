@@ -5,6 +5,7 @@ import type { ManagerId } from '../../data/managers.ts';
 import { searchCities, findCity, buildRegionLeague, clubFromCity } from '../../data/cities.ts';
 import { KIT_COLORS, kitColor, nearestKitColor, type KitColorId } from '../../data/palette.ts';
 import { Kit } from '../components/Kit.tsx';
+import { homeOf, awayOf } from '../../data/kits.ts';
 import type { City } from '../../data/cities.ts';
 import { Crest } from '../components/Crest.tsx';
 import { Icon } from '../components/Icon.tsx';
@@ -197,11 +198,11 @@ export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: st
             <div className="label-cap" style={{ marginBottom: 10 }}>הצבעים של {preview.me.short}</div>
             <div className="row" style={{ gap: 16, justifyContent: 'center', marginBottom: 12 }}>
               <div className="stack" style={{ gap: 5, alignItems: 'center' }}>
-                <Kit color={colour!} size={86} />
+                <Kit kit={homeOf(colour!.hex, colour!.trim)} size={86} label={`מדי בית ${colour!.name}`} />
                 <span className="sub" style={{ fontSize: 11.5 }}>בית</span>
               </div>
               <div className="stack" style={{ gap: 5, alignItems: 'center' }}>
-                <Kit color={colour!} size={86} away />
+                <Kit kit={awayOf(colour!.hex)} size={86} label={`מדי חוץ ${colour!.name}`} />
                 <span className="sub" style={{ fontSize: 11.5 }}>חוץ</span>
               </div>
             </div>

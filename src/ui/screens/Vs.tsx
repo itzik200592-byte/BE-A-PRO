@@ -4,6 +4,8 @@ import type { Club } from '../../data/clubs.ts';
 import { LEAGUE_NAMES } from '../../data/clubs.ts';
 import { Crest } from '../components/Crest.tsx';
 import { Icon } from '../components/Icon.tsx';
+import { Kit } from '../components/Kit.tsx';
+import { matchKits, type Kit as KitStrip } from '../../data/kits.ts';
 
 /**
  * The cinematic head to head, right before kickoff. Two crests fly in from the
@@ -16,6 +18,10 @@ export function VsScreen({ gs, onGo }: { gs: G.GameState; onGo: () => void }) {
   if (!p) { onGo(); return null; }
 
   const homeMine = p.iAmHome;
+  // what each side actually runs out in, the away team having changed if the
+  // two would have clashed
+  const kits = matchKits(p.home, p.away);
+  const changed = kits.away.shirt.toLowerCase() !== p.away.primary.toLowerCase();
   const verdictColor = p.verdict === 'favourite' ? 'var(--win)' : p.verdict === 'underdog' ? 'var(--loss)' : 'var(--gold)';
 
   return (
@@ -30,13 +36,13 @@ export function VsScreen({ gs, onGo }: { gs: G.GameState; onGo: () => void }) {
       </div>
 
       <div className="vs-clash">
-        <TeamSide club={p.home} ovr={p.homeOvr} mine={homeMine} side="home" />
+        <TeamSide club={p.home} ovr={p.homeOvr} mine={homeMine} side="home" kit={kits.home} />
 
         <div className="vs-mark" aria-hidden="true">
           <span>VS</span>
         </div>
 
-        <TeamSide club={p.away} ovr={p.awayOvr} mine={!homeMine} side="away" />
+        <TeamSide club={p.away} ovr={p.awayOvr} mine={!homeMine} side="away" kit={kits.away} changed={changed} />
       </div>
 
       {/* my recent form */}
@@ -64,11 +70,19 @@ export function VsScreen({ gs, onGo }: { gs: G.GameState; onGo: () => void }) {
   );
 }
 
-function TeamSide({ club, ovr, mine, side }: { club: Club; ovr: number; mine: boolean; side: 'home' | 'away' }) {
+function TeamSide({ club, ovr, mine, side, kit, changed }: {
+  club: Club; ovr: number; mine: boolean; side: 'home' | 'away'; kit: KitStrip; changed?: boolean;
+}) {
   const shown = useCountUp(ovr);
   return (
     <div className={`vs-team vs-${side}`}>
       <div className="vs-crest"><Crest club={club} size={92} /></div>
+      {/* the shirt they run out in, so the dots on the pitch are already
+          familiar by the time the whistle goes */}
+      <div className="vs-kit" style={{ animation: 'riseIn .4s var(--ease-out) .8s both' }}>
+        <Kit kit={kit} size={44} label={`המדים של ${club.short}`} />
+        {changed && <span className="vs-kit-note">מדי חוץ</span>}
+      </div>
       <div className="vs-name">{club.short}</div>
       {mine && <div className="vs-you">הקבוצה שלך</div>}
       <div className="vs-ovr score-face" style={{ color: mine ? 'var(--gold-hi)' : 'var(--ink)' }}>{shown}</div>

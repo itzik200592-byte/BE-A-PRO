@@ -4,6 +4,8 @@ import { LEAGUE_NAMES, isDerby } from '../../data/clubs.ts';
 import type { Club } from '../../data/clubs.ts';
 import { Meters } from '../components/bits.tsx';
 import { Crest } from '../components/Crest.tsx';
+import { Kit } from '../components/Kit.tsx';
+import { homeKit } from '../../data/kits.ts';
 import { Icon } from '../components/Icon.tsx';
 import type { IconName } from '../components/Icon.tsx';
 import { MiniTable } from './Table.tsx';
@@ -58,6 +60,8 @@ export function Hub({ gs, onStart, onSquad, onTransfers, onChronicle, onCaptain,
         {/* who you are, one line, no biography */}
         <div className="row" style={{ marginTop: 2, gap: 11 }}>
           <Crest club={c} size={44} />
+          {/* crest and shirt together, which is how a club is recognised */}
+          <Kit kit={homeKit(c)} size={30} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 21, lineHeight: 1.15 }}>{c.name}</div>
             <div style={{ fontSize: 13, color: 'var(--ink-faint)', fontWeight: 600, marginTop: 3 }}>
