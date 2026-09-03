@@ -855,8 +855,13 @@ export function suggestSubs(st: LiveState, offId: string, limit = 3): SubSuggest
     .map(p => {
       const exact = p.position === off.position;
       const sameLine = LINE_OF[p.position] === offLine;
-      const roleScore = exact ? 100 : sameLine ? 60 : 20;
-      const score = roleScore + p.fitness * 0.55 + overall(p) * 0.55;
+      // Quality first, position second. The old weights ran the other way,
+      // a hundred points for the exact shirt number against half a point per
+      // rating point, so a 45 rated natural beat a 59 rated man one role over
+      // and the suggestion was reliably the WORSE player. A position bonus is
+      // worth a couple of rating points, not a career.
+      const roleScore = exact ? 6 : sameLine ? 3 : -25;
+      const score = roleScore + overall(p) + p.fitness * 0.3;
       const reason = exact
         ? `${p.position} טבעי, כושר ${Math.round(p.fitness)}`
         : sameLine

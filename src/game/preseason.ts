@@ -71,9 +71,46 @@ export function starTarget(sq: Squad): Player | null {
   return pool.sort((a, b) => overall(b) - overall(a))[0];
 }
 
-/** The premium a suitor pays for a player who is not even for sale. */
-export function starFee(p: Player): number {
-  return Math.round((playerValue(p) * 1.7) / 1000) * 1000;
+/**
+ * What a suitor pays for a player who is not even for sale.
+ *
+ * The raw value is priced for a real transfer market, and ליגה ג׳ does not have
+ * one. A club there runs a season on about three hundred thousand shekel, so a
+ * first offer of a hundred and fifty was very nearly the entire budget arriving
+ * in one envelope, and the whole economy stopped mattering for two years.
+ * Divisions below the לאומית pay a fraction of the book price, because that is
+ * what amateur football pays.
+ */
+const FEE_SHARE = [0, 0.06, 0.14, 0.55, 1.0, 1.7];
+
+export function starFee(p: Player, tier = 3): number {
+  const t = Math.max(1, Math.min(5, Math.round(tier)));
+  return Math.round((playerValue(p) * FEE_SHARE[t]) / 500) * 500;
+}
+
+/**
+ * What else is in the deal, down where the money is not the point.
+ *
+ * A ליגה ג׳ transfer is settled over a plastic table with a handshake and
+ * whatever the other club can spare, and that is genuinely funnier and more
+ * Israeli than a number. Only the bottom two divisions get one.
+ */
+const SWEETENERS = [
+  'שני שקים של כדורים',
+  'סט מדים חדש לכל הסגל',
+  'משכורת של אב הבית לחצי שנה',
+  'מכונת כביסה למועדון',
+  'הסעה לכל משחקי החוץ העונה',
+  'שני סטים של קונוסים ומשרוקית',
+  'צביעה מחדש של חדר ההלבשה',
+  'מקרר חדש למזנון',
+  'רשתות חדשות לשני השערים',
+  'ארגז כדורים וקומקום',
+];
+
+export function feeSweetener(tier: number, seed: number): string | null {
+  if (tier > 2) return null;
+  return SWEETENERS[Math.abs(seed) % SWEETENERS.length];
 }
 
 /** The youngest player with real upside, the one who feels underpaid. */

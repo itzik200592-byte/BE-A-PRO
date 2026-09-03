@@ -97,16 +97,23 @@ export function PlayerRow({ p, traits, state, onOpen, swap, onSwap, captain }: {
 
   const swapColor = swap === 'armed' ? 'var(--gold)' : swap === 'in' ? 'var(--win)' : 'var(--ink-faint)';
   const swapLabel = swap === 'arm' ? `הוצא את ${p.name}` : swap === 'in' ? `הכנס את ${p.name}` : 'בטל החלפה';
+  // The control says what it does. A bare arrow icon read as decoration: once a
+  // starter is armed, the bench buttons say הכנס and the armed man says בטל,
+  // and the swap stops needing to be explained in a banner above the list.
+  const word = swap === 'armed' ? 'בטל' : swap === 'in' ? 'הכנס' : null;
   return (
     <div style={{ display: 'flex', alignItems: 'stretch', borderTop: '1px solid var(--line)' }}>
       {body}
       <button onClick={onSwap} aria-label={swapLabel} disabled={st === 'blocked'}
         style={{
-          flex: 'none', width: 44, minHeight: 56, display: 'grid', placeItems: 'center',
+          flex: 'none', minWidth: word ? 62 : 44, minHeight: 56,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
           color: swapColor, borderRadius: 8, opacity: st === 'blocked' ? 0.3 : 1,
-          background: swap === 'armed' ? 'rgba(233,185,73,.12)' : swap === 'in' ? 'rgba(51,194,122,.1)' : 'transparent',
+          fontWeight: 800, fontSize: 13,
+          background: swap === 'armed' ? 'rgba(233,185,73,.14)' : swap === 'in' ? 'rgba(51,194,122,.14)' : 'transparent',
+          border: swap === 'in' ? '1px solid rgba(51,194,122,.4)' : swap === 'armed' ? '1px solid rgba(233,185,73,.4)' : '1px solid transparent',
         }}>
-        <Icon name="sub" size={18} />
+        <Icon name="sub" size={word ? 14 : 18} />{word}
       </button>
     </div>
   );

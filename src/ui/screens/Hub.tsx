@@ -33,10 +33,10 @@ import { PACKS } from '../../game/packs.ts';
  * round is never more than one tap away.
  */
 
-export function Hub({ gs, onStart, onSquad, onTransfers, onChronicle, onCaptain, onAssistant, onInbox, onStadium, onPacks, onCoach, onTable }: {
+export function Hub({ gs, onStart, onSquad, onTransfers, onChronicle, onCaptain, onAssistant, onInbox, onStadium, onPacks, onCoach, onTable, onYouth }: {
   gs: G.GameState; onStart: () => void; onSquad: () => void; onTransfers: () => void;
   onChronicle: () => void; onCaptain: () => void; onAssistant: () => void; onInbox: () => void;
-  onStadium: () => void; onPacks: () => void; onCoach: () => void; onTable: () => void;
+  onStadium: () => void; onPacks: () => void; onCoach: () => void; onTable: () => void; onYouth: () => void;
 }) {
   const c = G.club(gs);
   const fx = G.playerFixture(gs);
@@ -94,6 +94,8 @@ export function Hub({ gs, onStart, onSquad, onTransfers, onChronicle, onCaptain,
             dot={G.assistantActive(gs) ? undefined : 'var(--gold)'} />
           <Cell i={7} icon="trophy" label="כרוניקה" onClick={onChronicle}
             badge={G.unreadChronicle(gs) || undefined} />
+          <Cell i={8} icon="star" label="נוער" onClick={onYouth}
+            dot={gs.youth.players.some(p => p.age >= 18) ? 'var(--gold)' : undefined} />
         </div>
 
         <FanNote msg={G.fanNote(gs, 'pre')} />

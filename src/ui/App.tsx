@@ -22,6 +22,7 @@ import { PressScreen } from './screens/Press.tsx';
 import { SeasonEnd, PreSeasonScreen } from './screens/SeasonEnd.tsx';
 import { SackedScreen } from './screens/Sacked.tsx';
 import { SponsorScreen } from './screens/Sponsor.tsx';
+import { YouthScreen } from './screens/Youth.tsx';
 import { UltimatumScreen } from './screens/Ultimatum.tsx';
 import { RescueScreen } from './screens/Rescue.tsx';
 import { ChronicleScreen } from './screens/Chronicle.tsx';
@@ -151,7 +152,14 @@ export function App() {
           onStadium={() => setGs(G.openStadium(gs))}
           onPacks={() => setGs(G.openPacks(gs))}
           onCoach={() => setGs(G.openCoach(gs))}
+          onYouth={() => setGs(G.openYouth(gs))}
           onTable={() => setGs(G.openTable(gs))} />
+      )}
+      {gs.phase === 'youth' && (
+        <YouthScreen gs={gs}
+          onPromote={id => setGs(g => G.promoteYouth(g, id))}
+          onRelease={id => setGs(g => G.releaseYouth(g, id))}
+          onBack={() => setGs(G.backToHub(gs))} />
       )}
       {gs.phase === 'stadium' && (
         <StadiumScreen gs={gs}

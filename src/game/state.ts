@@ -10,6 +10,9 @@ import { initLeague, applyResult, sortedTable, buildFixtures, emptyTable } from 
 import { LEAGUE_C, isDerby, LEAGUE_NAMES, setDerbies, derbiesFromClubs } from '../data/clubs.ts';
 import { buildRegionLeague, buildSiblingLeague, siblingClub } from '../data/cities.ts';
 import { debtState, debtLine, debtLimit } from './finance.ts';
+import { emptyYouth, seedYouth, advanceYouth } from './youth.ts';
+import type { Youth } from './youth.ts';
+export type { Youth };
 import { sponsorOffers, signSponsor, sponsorRound } from './sponsor.ts';
 import type { Sponsor, SponsorOffer, SponsorId } from './sponsor.ts';
 export type { Sponsor, SponsorOffer, SponsorId };
@@ -33,7 +36,7 @@ import type { FreeAgent } from './transfers.ts';
 import { makeMarket, windowState, sellPrice, contractTerms, MIN_SQUAD, MAX_SQUAD } from './transfers.ts';
 import {
   PRE_ROUNDS, seedContract, contractYears, renewTerms, raiseBonus,
-  starTarget, starFee, youngTarget,
+  starTarget, starFee, feeSweetener, youngTarget,
 } from './preseason.ts';
 import type { ChronicleEntry } from './chronicle.ts';
 import { chronicleAfterRound, chronicleAtSeasonEnd } from './chronicle.ts';
@@ -59,7 +62,7 @@ export type Phase =
   | 'onboard-archetype' | 'onboard-manager' | 'onboard-club' | 'signing' | 'squad' | 'hub' | 'transfers'
   | 'dilemma' | 'tactic' | 'vs' | 'match' | 'result' | 'press' | 'season-end' | 'chronicle'
   | 'captain' | 'assistant' | 'coach' | 'preseason' | 'preseason-market' | 'inbox' | 'chat' | 'table' | 'stadium'
-  | 'packs' | 'sacked' | 'sponsor' | 'ultimatum' | 'rescue';
+  | 'packs' | 'sacked' | 'sponsor' | 'ultimatum' | 'rescue' | 'youth';
 
 export type MarketLine = 'gk' | 'def' | 'mid' | 'atk';
 
@@ -205,6 +208,8 @@ export interface GameState {
   crisisDone: boolean;
   /** what actually happened to the money, for the owner to explain */
   crisisReason: string | null;
+  /** the youth academy: 16-18 year olds training toward the senior squad */
+  youth: Youth;
   style: ManagerStyle;
   /** per player season record for the whole division, drives the charts */
   seasonStats: Record<string, PlayerSeason>;
@@ -300,6 +305,7 @@ export function newGame(seed = 12345): GameState {
     ultimatumSeason: null,
     crisisDone: false,
     crisisReason: null,
+    youth: emptyYouth(),
     style: { players: 0, media: 0, money: 0 },
     seasonStats: {},
     careerStats: {},
@@ -355,6 +361,23 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
  * is STORED, not where it is drawn, so it cannot come back somewhere else.
  */
 const meter = (v: number) => Math.round(clamp(v, 0, 100));
+
+/**
+ * How the dressing room actually moves.
+ *
+ * Good news is worth less the higher the mood already is, bad news is worth all
+ * of it. A flat +6 a win had a squad at 85 by the sixth round and 92 by the end
+ * of a first season, which made the whole meter decoration: it was pinned near
+ * the top from the spring of year one and never came down.
+ *
+ * Now a happy squad is hard to make happier and just as easy to upset, so
+ * ninety is a run you went on rather than a number you passed through.
+ */
+function moraleShift(current: number, delta: number): number {
+  if (delta <= 0) return meter(current + delta);
+  const room = clamp((100 - current) / 50, 0.2, 1);
+  return meter(current + delta * room);
+}
 const cash = (v: number) => Math.round(v);
 
 /* ------------------------------------------------------------- onboarding */
@@ -518,6 +541,7 @@ export function takeRescue(gs: GameState): GameState {
     market: makeMarket(offer.tier, rng, 12, taken),
     marketFocus: null,
     sponsor: null,
+    youth: { ...emptyYouth(), players: seedYouth(offer.tier, createRng(seed + 5501), taken) },
     stadium: { capacity: STADIUM_START, project: null },
     stadiumReveal: null,
     lastLedger: null,
@@ -548,16 +572,81 @@ export function takeRescue(gs: GameState): GameState {
   };
 }
 
+/**
+ * Give a freshly signed club its youth intake, if it has none yet. Rescued
+ * managers keep whatever academy they walked into.
+ */
+function ensureYouth(gs: GameState): GameState {
+  if (gs.youth.players.length) return gs;
+  const rng = createRng(gs.seasonSeed + 5501);
+  const sq = mySquad(gs);
+  const used = new Set([...sq.starters, ...sq.bench].map(p => p.name));
+  return { ...gs, youth: { ...emptyYouth(), players: seedYouth(club(gs).tier, rng, used) } };
+}
+
+/* --------------------------------------------------------- youth academy */
+
+/** Move a player who has turned 18 up into the senior squad on a youth deal. */
+export function promoteYouth(gs: GameState, playerId: string): GameState {
+  const kid = gs.youth.players.find(p => p.id === playerId);
+  if (!kid || kid.age < 18 || squadSize(gs) >= MAX_SQUAD) return gs;
+  const sq = mySquad(gs);
+  const next = writeSquad(gs, { starters: sq.starters, bench: [...sq.bench, kid] });
+  return {
+    ...next,
+    youth: {
+      ...gs.youth,
+      players: gs.youth.players.filter(p => p.id !== playerId),
+      ready: gs.youth.ready.filter(n => n !== kid.name),
+    },
+    contracts: { ...gs.contracts, [kid.id]: 3 },
+    pendingOutcome: `${kid.name} חתם חוזה בכיר ועלה לסגל. ${squadSize(next)} שחקנים בסגל עכשיו.`,
+  };
+}
+
+/** Let a youth player go, whatever his age. */
+export function releaseYouth(gs: GameState, playerId: string): GameState {
+  const kid = gs.youth.players.find(p => p.id === playerId);
+  if (!kid) return gs;
+  return {
+    ...gs,
+    youth: {
+      ...gs.youth,
+      players: gs.youth.players.filter(p => p.id !== playerId),
+      ready: gs.youth.ready.filter(n => n !== kid.name),
+    },
+    pendingOutcome: `${kid.name} שוחרר מהמחלקה.`,
+  };
+}
+
+/** A senior squad player, 18 or under, can be sent down to keep developing. */
+export function demoteToYouth(gs: GameState, playerId: string): GameState {
+  const sq = mySquad(gs);
+  const p = [...sq.starters, ...sq.bench].find(x => x.id === playerId);
+  if (!p || p.age > 18 || squadSize(gs) <= MIN_SQUAD) return gs;
+  const next = removePlayer(gs, playerId);
+  return {
+    ...next,
+    youth: { ...next.youth, players: [...next.youth.players, p] },
+    pendingOutcome: `${p.name} ירד למחלקת הנוער כדי לקבל דקות ולהתפתח.`,
+  };
+}
+
+export function openYouth(gs: GameState): GameState { return { ...gs, phase: 'youth', pendingOutcome: null }; }
+export function closeYouth(gs: GameState): GameState { return { ...gs, phase: 'hub', pendingOutcome: null }; }
+export function clearYouthOutcome(gs: GameState): GameState { return { ...gs, pendingOutcome: null }; }
+
 /** Signing done, now go and look at the squad you inherited. */
 export function afterSigning(gs: GameState, effect: { morale?: number; prestige?: number }): GameState {
   // A rescued manager has already met a squad and run a club. He does not need
   // the onboarding tour again, he needs somebody on the shirt.
   const next = gs.crisisDone ? 'sponsor' as const : 'squad' as const;
+  gs = ensureYouth(gs);
   return {
     ...gs,
     meters: {
       money: cash(gs.meters.money),
-      morale: meter(gs.meters.morale + (effect.morale ?? 0)),
+      morale: moraleShift(gs.meters.morale, (effect.morale ?? 0)),
       prestige: meter(gs.meters.prestige + (effect.prestige ?? 0)),
     },
     style: scoreStyle(gs.style, effect),
@@ -714,6 +803,8 @@ export interface PreEvent {
   player: Player;
   /** the money attached: a suitor's fee, a raise, or a renewal bonus */
   amount: number;
+  /** what else is in the deal, down where the money is not the point */
+  sweetener?: string | null;
 }
 
 /** My players whose contract has run out this summer. */
@@ -737,7 +828,14 @@ export function preseasonEvents(gs: GameState): PreEvent[] {
   const inSaga = new Set<string>();
   if (!done.has('dep-star') && club(gs).tier < TOP_TIER) {
     const star = starTarget(sq);
-    if (star) { out.push({ id: 'dep-star', kind: 'star', player: star, amount: starFee(star) }); inSaga.add(star.id); }
+    if (star) {
+      out.push({
+        id: 'dep-star', kind: 'star', player: star,
+        amount: starFee(star, club(gs).tier),
+        sweetener: feeSweetener(club(gs).tier, gs.seasonSeed + star.name.length),
+      });
+      inSaga.add(star.id);
+    }
   }
   // the whole contract business, raises and renewals, only starts the second
   // summer. The first season is amateur ליגה ג׳ football: no contracts, just
@@ -786,22 +884,28 @@ export function resolveDeparture(gs: GameState, kind: 'star' | 'young', optionIn
   if (kind === 'star') {
     const p = starTarget(sq);
     if (!p) return gs;
-    const fee = starFee(p);
+    const fee = starFee(p, club(gs).tier);
+    const extra = feeSweetener(club(gs).tier, gs.seasonSeed + p.name.length);
     const resolved = [...gs.preResolved, 'dep-star'];
     if (optionIndex === 0) {
       // cash in: he gets his move, you get the money and a weaker team
       const next = removePlayer(gs, p.id);
       return {
         ...next, preResolved: resolved,
-        meters: { ...gs.meters, money: cash(gs.meters.money + fee), morale: meter(gs.meters.morale + 2) },
+        meters: { ...gs.meters, money: cash(gs.meters.money + fee), morale: moraleShift(gs.meters.morale, 2) },
         style: scoreStyle(gs.style, { money: fee, morale: 2 }),
-        pendingOutcome: `${p.name} נמכר תמורת ${formatK(fee)}. הכסף בקופה, אבל הסגל איבד את השחקן הכי טוב שלו.`,
+        // the count is said out loud, because a squad that reads the same size
+        // afterwards (the summer tops it back up) made the sale look ignored
+        pendingOutcome: (extra
+          ? `${p.name} נמכר תמורת ${formatK(fee)} ו${extra}. הסגל איבד את השחקן הכי טוב שלו, אבל לפחות יש ציוד.`
+          : `${p.name} נמכר תמורת ${formatK(fee)}. הכסף בקופה, אבל הסגל איבד את השחקן הכי טוב שלו.`)
+          + ` נשארתם עם ${squadSize(next)} שחקנים.`,
       };
     }
     // block the move: he stays, the dressing room grumbles
     return {
       ...gs, preResolved: resolved,
-      meters: { ...gs.meters, morale: meter(gs.meters.morale - 5) },
+      meters: { ...gs.meters, morale: moraleShift(gs.meters.morale, -(5)) },
       style: scoreStyle(gs.style, { morale: -5, prestige: 1 }),
       pendingOutcome: `אמרת לא. ${p.name} נשאר, אבל הוא לא מרוצה והחדר הרגיש את זה.`,
     };
@@ -816,7 +920,7 @@ export function resolveDeparture(gs: GameState, kind: 'star' | 'young', optionIn
     const contracts = { ...gs.contracts, [p.id]: 3 };
     return {
       ...gs, preResolved: resolved, contracts,
-      meters: { ...gs.meters, money: cash(gs.meters.money - bonus), morale: meter(gs.meters.morale + 4) },
+      meters: { ...gs.meters, money: cash(gs.meters.money - bonus), morale: moraleShift(gs.meters.morale, 4) },
       style: scoreStyle(gs.style, { money: -bonus, morale: 4 }),
       pendingOutcome: `${p.name} חתם חוזה חדש ומחייך. ${formatK(bonus)} מהקופה, אבל הכישרון נשאר בבית לשלוש שנים.`,
     };
@@ -827,7 +931,7 @@ export function resolveDeparture(gs: GameState, kind: 'star' | 'young', optionIn
   return {
     ...gs, preResolved: resolved,
     contracts: { ...gs.contracts, [p.id]: kept },
-    meters: { ...gs.meters, morale: meter(gs.meters.morale - 4) },
+    meters: { ...gs.meters, morale: moraleShift(gs.meters.morale, -(4)) },
     style: scoreStyle(gs.style, { money: 1, morale: -4 }),
     pendingOutcome: `סירבת להעלאה. ${p.name} בלע את זה, אבל הפעם הבאה שהחוזה שלו ייגמר, הוא כבר לא יבקש יפה.`,
   };
@@ -1653,20 +1757,38 @@ export function startWeek(gs: GameState): GameState {
   return { ...gs, phase: 'dilemma', dilemma: urgent, inbox, fanHistory };
 }
 
+/**
+ * A promise made in a dilemma is kept in the save. Choosing to release the man
+ * who asked really removes him, and the outcome says who left and how many are
+ * left, so the manager can check his own decision against the squad screen.
+ * Never below eleven plus a bench, whatever the fiction wants.
+ */
+function keepThePromise(gs: GameState, rolled: RolledDilemma, opt: RolledDilemma['options'][number]): { gs: GameState; note: string } {
+  if (!opt.release || !rolled.subjectName || squadSize(gs) <= 14) return { gs, note: '' };
+  const sq = mySquad(gs);
+  const him = [...sq.starters, ...sq.bench].find(x => x.name === rolled.subjectName);
+  if (!him) return { gs, note: '' };
+  const next = removePlayer(gs, him.id);
+  return { gs: next, note: ` ${him.name} עזב, ונשארתם עם ${squadSize(next)} שחקנים.` };
+}
+
 export function chooseDilemma(gs: GameState, optionIndex: number): GameState {
-  if (!gs.dilemma) return gs;
-  const opt = gs.dilemma.options[optionIndex];
+  const rolled = gs.dilemma;
+  if (!rolled) return gs;
+  const opt = rolled.options[optionIndex];
   const e: DilemmaEffect = opt.effect;
+  const kept = keepThePromise(gs, rolled, opt);
+  gs = kept.gs;
   return {
     ...gs,
     meters: {
       money: cash(gs.meters.money + (e.money ?? 0)),
-      morale: meter(gs.meters.morale + (e.morale ?? 0)),
+      morale: moraleShift(gs.meters.morale, (e.morale ?? 0)),
       prestige: meter(gs.meters.prestige + (e.prestige ?? 0)),
     },
-    pendingOutcome: opt.outcome,
+    pendingOutcome: opt.outcome + kept.note,
     style: scoreStyle(gs.style, e),
-    dilemmaHistory: [...gs.dilemmaHistory, gs.dilemma.id],
+    dilemmaHistory: [...gs.dilemmaHistory, rolled.id],
   };
 }
 
@@ -1692,14 +1814,16 @@ export function answerInbox(gs: GameState, itemIndex: number, optionIndex: numbe
   const opt = item.options[optionIndex];
   if (!opt) return gs;
   const e: DilemmaEffect = opt.effect;
+  const kept = keepThePromise(gs, item, opt);
+  gs = kept.gs;
   return {
     ...gs,
     meters: {
       money: cash(gs.meters.money + (e.money ?? 0)),
-      morale: meter(gs.meters.morale + (e.morale ?? 0)),
+      morale: moraleShift(gs.meters.morale, (e.morale ?? 0)),
       prestige: meter(gs.meters.prestige + (e.prestige ?? 0)),
     },
-    pendingOutcome: opt.outcome,
+    pendingOutcome: opt.outcome + kept.note,
     style: scoreStyle(gs.style, e),
     dilemmaHistory: [...gs.dilemmaHistory, item.id],
     inbox: gs.inbox.filter((_, i) => i !== itemIndex),
@@ -1828,7 +1952,7 @@ export function commitRound(gs: GameState, playerResult: MatchResult): GameState
   const won = myGoals > oppGoals, draw = myGoals === oppGoals;
   const prize = matchPrize(club(gs).tier, won ? 'W' : draw ? 'D' : 'L');
   // a motivator lifts the room after any result, a cold coach lets it sag
-  const moraleDelta = (won ? +6 : draw ? 0 : -5) + coachMoraleBias(gs.coach);
+  const moraleDelta = (won ? +4 : draw ? -1 : -6) + coachMoraleBias(gs.coach);
 
   const derby = isDerby(fx.homeId, fx.awayId);
   // the week also costs money to run, so a result is a real financial event
@@ -1851,7 +1975,7 @@ export function commitRound(gs: GameState, playerResult: MatchResult): GameState
     lastLedger: { prize, gate, sponsor: shirt, signage: boards, ...costs, net: prize + gate + shirt + boards - costs.total },
     meters: {
       money: cash(gs.meters.money + prize + gate + shirt + boards - costs.total),
-      morale: meter(gs.meters.morale + moraleDelta),
+      morale: moraleShift(gs.meters.morale, moraleDelta),
       prestige: meter(gs.meters.prestige + (won ? 2 : draw ? 0 : -1)),
     },
     league: { ...gs.league, table },
@@ -1957,7 +2081,7 @@ export function answerPress(gs: GameState, index: number): GameState {
   const meters = ans
     ? {
         money: cash(gs.meters.money),
-        morale: meter(gs.meters.morale + (ans.effect.morale ?? 0)),
+        morale: moraleShift(gs.meters.morale, (ans.effect.morale ?? 0)),
         prestige: meter(gs.meters.prestige + (ans.effect.prestige ?? 0)),
       }
     : gs.meters;
@@ -2211,7 +2335,7 @@ export function startNextSeason(gs: GameState): GameState {
       // and it would have quietly forgiven anything the owner was about to sack
       // you for.
       money: cash(rawMoney),
-      morale: meter(gs.meters.morale + moraleDelta),
+      morale: moraleShift(gs.meters.morale, moraleDelta),
       prestige: meter(gs.meters.prestige + prestigeDelta - (brokeIt ? 4 : 0)),
     },
     seasonStats: {},
@@ -2241,6 +2365,13 @@ export function startNextSeason(gs: GameState): GameState {
     adsWatched: 0,
     pull: null,
     coach: { ...gs.coach, seasons: gs.coach.seasons + 1 },
+    // the academy has its summer too: one kid breaks out, the eighteen year olds
+    // come up for a decision, and a new intake arrives
+    youth: advanceYouth(
+      gs.youth, next.report.newTier, createRng(next.seed + 6602),
+      new Set([...mine.starters, ...mine.bench].map(pl => pl.name)),
+      coachYouthGrowth(gs.coach),
+    ),
   };
 }
 

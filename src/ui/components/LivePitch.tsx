@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { LiveState, Side } from '../../game/liveMatch.ts';
 import type { Club } from '../../data/clubs.ts';
 import { formation, fillFormation } from '../../data/formations.ts';
+import { matchKits } from '../../data/kits.ts';
 import { PitchSim } from '../../game/pitchSim.ts';
 import type { PitchSlot } from '../../game/pitchSim.ts';
 
@@ -44,6 +45,8 @@ export function LivePitch({ st, home, away, myId, play = null, onPlayed }: {
   const trailEls = useRef<HTMLSpanElement[]>([]);
   const stRef = useRef(st); stRef.current = st;
 
+  // home wears home, away changes if the two would clash, so no green on green
+  const kits = matchKits(home, away);
   const fHome = formation(st.home.tactic.formation);
   const fAway = formation(st.away.tactic.formation);
   const slots: PitchSlot[] = [
@@ -197,14 +200,14 @@ export function LivePitch({ st, home, away, myId, play = null, onPlayed }: {
 
       {slots.map(sl => {
         const side: Side = sl.home ? st.home : st.away;
-        const club = sl.home ? home : away;
+        const kit = sl.home ? kits.home : kits.away;
         const me = side.id === myId;
         return (
           <span key={sl.id} ref={n => { if (n) nodes.current.set(sl.id, n); else nodes.current.delete(sl.id); }}
             aria-hidden="true" style={{
               position: 'absolute', left: 0, top: 0,
               width: me ? 13 : 11, height: me ? 13 : 11, borderRadius: '50%',
-              background: club.primary, border: `1.5px solid ${me ? '#fff' : 'rgba(0,0,0,.45)'}`,
+              background: kit.shirt, border: `1.5px solid ${me ? '#fff' : kit.trim}`,
               boxShadow: me ? '0 0 7px rgba(255,255,255,.5)' : '0 1px 3px rgba(0,0,0,.5)',
               willChange: 'transform', zIndex: 3,
             }} />

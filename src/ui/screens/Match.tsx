@@ -540,15 +540,43 @@ function SubSheet({ st, onSub, onClose, focusId }: {
       <div className="sheet-scrim" onClick={onClose}>
         <div className="sheet" onClick={e => e.stopPropagation()} style={{ maxHeight: '84vh', overflowY: 'auto' }} role="dialog" aria-label="הרכב וחילופים">
           <div className="sheet-grip" />
-          <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
-            <div className="h2">ההרכב שלי</div>
+
+          {/* the way back is at the top, not a scroll away, and the pause is
+              said out loud: nobody should wonder whether the match ran on
+              while they were reading the bench */}
+          <div className="row" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
+            <button className="sheet-back" onClick={onClose}>
+              <Icon name="chevron" size={15} /> חזרה למשחק
+            </button>
+            <span className="chip" style={{ background: 'rgba(233,185,73,.13)', color: 'var(--gold-hi)', border: '1px solid rgba(233,185,73,.3)' }}>
+              <Icon name="pause" size={12} /> המשחק עצור
+            </span>
+          </div>
+
+          <div className="row" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
+            <div className="h2" style={{ fontSize: 19 }}>המאמן מסתובב לספסל</div>
             <span className="chip" style={{ background: 'rgba(255,255,255,.06)', color: 'var(--ink-dim)' }}>
               חילופים <span className="num">{st.subsUsed}/{L.MAX_SUBS}</span>
             </span>
           </div>
 
-          <p className="hint" style={{ margin: '0 0 8px' }}>
-            {canSub ? 'לחץ על שחקן כדי לראות מי יכול להחליף אותו.' : 'נגמרו החילופים, אבל אפשר עדיין לעקוב אחרי הכושר.'}
+          {/* the bench itself, players sitting on it, before anything else */}
+          <div className="bench-strip" role="list" aria-label="הספסל">
+            {side.bench.length === 0
+              ? <div className="sub" style={{ fontSize: 12, padding: '10px 0', textAlign: 'center', width: '100%' }}>הספסל ריק</div>
+              : side.bench.map(p => (
+                <div key={p.id} className="bench-seat" role="listitem">
+                  <span className="bench-pos">{p.position}</span>
+                  <span className="bench-ovr num" style={{ color: ovrColor(overall(p)) }}>{overall(p)}</span>
+                  <span className="bench-name">{p.name.split(' ')[0]}</span>
+                  <span className="bench-fit"><span style={{ width: `${Math.round(p.fitness)}%`, background: fitColor(Math.round(p.fitness)) }} /></span>
+                </div>
+              ))}
+            <div className="bench-wood" aria-hidden="true" />
+          </div>
+
+          <p className="hint" style={{ margin: '2px 0 8px' }}>
+            {canSub ? 'לחץ על שחקן במגרש כדי לראות מי מהספסל נכנס במקומו.' : 'נגמרו החילופים, אבל אפשר עדיין לעקוב אחרי הכושר.'}
           </p>
 
           {side.onPitch.map(p => (
@@ -562,18 +590,6 @@ function SubSheet({ st, onSub, onClose, focusId }: {
               )}
             </div>
           ))}
-
-          <div className="row" style={{ gap: 8, marginTop: 12, paddingTop: 9, borderTop: '1px solid var(--line-2)' }}>
-            <Icon name="sub" size={13} color="var(--ink-faint)" />
-            <span className="label-cap">ספסל</span>
-            <span className="spacer" />
-            <span style={{ fontSize: 10.5, color: 'var(--ink-faint)', fontWeight: 700 }}>
-              <span className="num">{side.bench.length}</span> זמינים
-            </span>
-          </div>
-          {side.bench.length === 0
-            ? <div className="sub" style={{ fontSize: 12, padding: '6px 0' }}>הספסל ריק</div>
-            : side.bench.map(p => <FitRow key={p.id} p={p} bench />)}
 
           <button className="btn" style={{ marginTop: 14 }} onClick={onClose}>חזרה למשחק</button>
         </div>

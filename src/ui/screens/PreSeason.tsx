@@ -264,7 +264,14 @@ function DepartureCard({ ev, onPick }: { ev: PreEvent; onPick: (optionIndex: num
     ? `יש עליי קבוצה מליגה בכירה יותר. אני מרגיש שהגיע הזמן שלי להתקדם. תשקול את זה.`
     : `מאמן, אני נותן הכל על המגרש. מגיע לי חוזה שמכבד אותי. אל תיתן לי סיבה לחפש במקום אחר.`;
   const options = star
-    ? [{ label: `מכור תמורת ${formatMoney(ev.amount)}`, tone: 'money' as const }, { label: 'חסום, הוא נשאר', tone: 'hold' as const }]
+    ? [{
+      // down in the amateur divisions the fee is pocket money and the rest of
+      // the deal is a washing machine, which is both funnier and truer
+      label: ev.sweetener
+        ? `מכור: ${formatMoney(ev.amount)} + ${ev.sweetener}`
+        : `מכור תמורת ${formatMoney(ev.amount)}`,
+      tone: 'money' as const,
+    }, { label: 'חסום, הוא נשאר', tone: 'hold' as const }]
     : [{ label: `תן העלאה, ${formatMoney(ev.amount)}`, tone: 'money' as const }, { label: 'סרב, שיוכיח קודם', tone: 'hold' as const }];
 
   return (

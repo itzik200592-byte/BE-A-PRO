@@ -26,11 +26,20 @@ export interface DilemmaOption {
   label: string;
   effect: DilemmaEffect;
   outcome: string;   // shown after choosing
+  /** this choice releases the subject from the squad, for real */
+  release?: boolean;
 }
 
 export interface DilemmaTemplate {
   id: string;
   speaker: Speaker;
+  /**
+   * Which real player this is about, as a Ctx name field. A dilemma with a
+   * subject shows his name, and a release option removes exactly him. Without
+   * it "שחקן בסגל" asked for minutes, you promised or refused, and there was no
+   * way to ever know whether your answer meant anything, because it did not.
+   */
+  subject?: 'star' | 'benched' | 'youngster' | 'veteranName' | 'scorer' | 'dry';
   slots: Record<string, string[]>;
   text: string;                 // uses {slot} and any Ctx field
   /** only offered when this holds, so the fiction never contradicts the save */
@@ -87,6 +96,7 @@ export const TEMPLATES: DilemmaTemplate[] = [
   {
     id: 'player_minutes_or_quit',
     speaker: 'player',
+    subject: 'benched',
     when: c => !!c.benched && c.benchedApps <= 1 && c.week >= 3,
     slots: {
       job: ['משמרות לילה במפעל', 'עבודה מהבוקר', 'תואר שאני חייב לסיים', 'עסק קטן שאני מזניח', 'אישה שכבר אומרת לי די', 'שתי משרות ואין לי כוח'],
@@ -98,20 +108,21 @@ export const TEMPLATES: DilemmaTemplate[] = [
         outcome: 'הוא יצא מהחדר בן אדם אחר. עכשיו כל הסגל מסתכל אם תעמוד במילה שלך.' },
       { label: 'תילחם על המקום, פה אין מתנות', effect: { morale: -6, prestige: +5 },
         outcome: 'הוא הנהן ויצא בשקט. באימון למחרת הוא רץ כמו שלא רץ כל העונה.' },
-      { label: 'אני משחרר אותך, תמצא קבוצה שתשחק בה', effect: { money: +18000, morale: -4, prestige: -2 },
+      { label: 'אני משחרר אותך, תמצא קבוצה שתשחק בה', effect: { money: +18000, morale: -4, prestige: -2 }, release: true,
         outcome: 'נפרדתם בכבוד. חסכת שכר, אבל הסגל התקצר בשחקן.' },
     ],
   },
   {
     id: 'player_transfer_request',
     speaker: 'player',
+    subject: 'star',
     when: c => c.week >= 4,
     slots: {
       reason: ['קבוצה מהליגה שמעלינו פנתה אליי', 'אני רוצה להיות קרוב לבית', 'הסוכן שלי אומר שאני מבזבז שנים', 'הציעו לי כפול ממה שאני מקבל פה'],
     },
     text: 'מאמן, {reason}. אני לא רוצה לעשות רעש בתקשורת, באתי אליך קודם. תשחרר אותי?',
     options: (c) => [
-      { label: 'לך, בהצלחה', effect: { money: +Math.round(c.money * 0.18) + 60000, morale: -8, prestige: -2 },
+      { label: 'לך, בהצלחה', effect: { money: +Math.round(c.money * 0.18) + 60000, morale: -8, prestige: -2 }, release: true,
         outcome: 'הכסף נכנס לקופה. בחדר ההלבשה מרגישים שמי שרוצה ללכת, הולך.' },
       { label: 'אתה חתום, אתה נשאר', effect: { morale: -3, prestige: +4 },
         outcome: 'עמדת על שלך. הוא נשאר, קצת חמוץ, אבל הסגל ראה שאתה לא נשבר.' },
@@ -122,6 +133,7 @@ export const TEMPLATES: DilemmaTemplate[] = [
   {
     id: 'veteran_retirement',
     speaker: 'player',
+    subject: 'veteranName',
     when: c => !!c.veteranName,
     slots: {
       body: ['הברך שלי מתה', 'הגב לא נותן לי לישון', 'אני מתאושש שלושה ימים אחרי משחק'],
@@ -515,6 +527,8 @@ export interface RolledDilemma {
   id: string;
   speaker: Speaker;
   speakerLabel: string;
+  /** the actual player this is about, when the template names one */
+  subjectName?: string;
   text: string;
   options: DilemmaOption[];
 }
@@ -548,5 +562,10 @@ export function rollDilemma(tpl: DilemmaTemplate, ctx: Ctx, rng: Rng): RolledDil
   }
   const text = fill(tpl.text, ctx, picks);
   const options = tpl.options(ctx).map(o => ({ ...o, outcome: fill(o.outcome, ctx, picks) }));
-  return { id: tpl.id, speaker: tpl.speaker, speakerLabel: SPEAKER_LABEL[tpl.speaker], text, options };
+  const subjectName = tpl.subject ? (ctx[tpl.subject] || undefined) : undefined;
+  // a player with a name is a person, "שחקן בסגל" is scenery
+  const speakerLabel = subjectName && tpl.speaker === 'player'
+    ? `${subjectName} · ${SPEAKER_LABEL.player}`
+    : SPEAKER_LABEL[tpl.speaker];
+  return { id: tpl.id, speaker: tpl.speaker, speakerLabel, subjectName, text, options };
 }

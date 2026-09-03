@@ -812,3 +812,35 @@ input{font-family:inherit;}
 .rescue-n{flex:none; width:18px; height:18px; border-radius:50%; display:grid; place-items:center;
   background:rgba(255,255,255,.07); font-size:10.5px; font-weight:800;}
 .rescue-step[data-hot="1"] .rescue-n{background:var(--gold); color:#1B1305;}
+
+/* ---- the bench, with players actually sitting on it */
+.sheet-back{
+  display:inline-flex; align-items:center; gap:5px; padding:8px 12px; min-height:40px;
+  background:var(--surface); border:1px solid var(--line-2); border-radius:var(--plate-sm);
+  color:var(--ink); font-weight:800; font-size:13.5px; cursor:pointer;
+}
+.sheet-back:active{transform:scale(.97)}
+.bench-strip{
+  position:relative; display:flex; gap:7px; overflow-x:auto; padding:6px 4px 14px;
+  scrollbar-width:none;
+}
+.bench-strip::-webkit-scrollbar{display:none}
+.bench-seat{
+  position:relative; z-index:1; flex:none; width:64px;
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  background:linear-gradient(180deg,var(--surface-2),var(--surface));
+  border:1px solid var(--line-2); border-radius:10px 10px 4px 4px;
+  padding:7px 4px 6px;
+}
+.bench-pos{font-size:9.5px; font-weight:800; color:var(--ink-faint); letter-spacing:.04em;}
+.bench-ovr{font-family:var(--font-display); font-size:17px; line-height:1;}
+.bench-name{font-size:10.5px; font-weight:700; color:var(--ink-dim); max-width:100%;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.bench-fit{width:80%; height:3px; border-radius:2px; background:rgba(255,255,255,.10); overflow:hidden;}
+.bench-fit span{display:block; height:100%; border-radius:2px;}
+/* the plank they sit on */
+.bench-wood{
+  position:absolute; z-index:0; inset-inline:0; bottom:2px; height:9px; border-radius:3px;
+  background:repeating-linear-gradient(90deg,#4a3421 0 44px,#3d2a19 44px 48px);
+  border:1px solid rgba(0,0,0,.4); box-shadow:0 3px 6px rgba(0,0,0,.4);
+}
