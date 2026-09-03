@@ -3,7 +3,7 @@
  * and no fixture is ever two shirts you cannot tell apart.
  *   node --experimental-strip-types scripts/kit-check.mts
  */
-import { matchKits, clash } from '../src/data/kits.ts';
+import { matchKits, clash, homeOf, awayOf } from '../src/data/kits.ts';
 import { KIT_COLORS, kitColor, nearestKitColor } from '../src/data/palette.ts';
 import { CITIES, clubFromCity } from '../src/data/cities.ts';
 import * as G from '../src/game/state.ts';
@@ -30,6 +30,19 @@ for (const a of KIT_COLORS) {
   const away = { ...clubs[1], primary: a.hex, accent: a.trim };
   const k = matchKits(home, away);
   if (clash(k.home.shirt, k.away.shirt)) fails.push(`${a.id} v ${a.id} unreadable`);
+}
+
+/* 2b. every colour's own home and away kit are tellable apart in the picker.
+       This is exactly the white bug: a light club whose change strip came out
+       the same white as its home. They may share a shirt colour only if the
+       away carries a pattern to set it apart (white with black stripes). */
+for (const a of KIT_COLORS) {
+  const home = homeOf(a.hex, a.trim);
+  const away = awayOf(a.hex);
+  const sameColour = clash(home.shirt, away.shirt);
+  const patternSetsApart = !!away.pattern && away.pattern !== 'solid';
+  if (sameColour && !patternSetsApart)
+    fails.push(`${a.id}: home and away kit look the same`);
 }
 
 /* 3. the manager's choice actually becomes the club's colours */

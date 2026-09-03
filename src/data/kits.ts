@@ -12,11 +12,16 @@
 
 import type { Club } from './clubs.ts';
 
+/** How the shirt front is broken up, when it is not one flat colour. */
+export type KitPattern = 'solid' | 'stripes' | 'half' | 'sash' | 'hoops';
+
 export interface Kit {
   /** the shirt body, which is what the pitch dot uses */
   shirt: string;
   /** the trim, for the ring around the dot */
   trim: string;
+  /** how the front is broken up; absent means a flat shirt */
+  pattern?: KitPattern;
 }
 
 /** A home strip from a pair of colours, club or not yet a club. */
@@ -25,11 +30,16 @@ export function homeOf(primary: string, accent: string): Kit {
 }
 
 /**
- * A change strip from a colour: a light club goes dark and a dark club goes
- * light, keeping its own colour as the trim so it is still recognisable.
+ * A change strip from a colour. The standard swap is a light club going dark
+ * and a dark club going light, so the change kit always contrasts with the
+ * home one. A near-white club is the exception: going to solid black would
+ * throw away its identity, so it keeps white and takes black stripes instead,
+ * which is unmistakably a second shirt while still being the white team.
  */
 export function awayOf(primary: string): Kit {
-  return { shirt: isLight(primary) ? '#f2f5f8' : '#1b1f27', trim: primary };
+  const L = lightness(primary);
+  if (L > 0.82) return { shirt: '#f4f6f8', trim: '#15181f', pattern: 'stripes' };
+  return { shirt: L > 0.55 ? '#15181f' : '#f2f5f8', trim: primary };
 }
 
 /** A club's home strip, straight from its identity. */

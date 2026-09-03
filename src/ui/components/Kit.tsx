@@ -1,4 +1,4 @@
-import type { Kit as KitStrip } from '../../data/kits.ts';
+import type { Kit as KitStrip, KitPattern } from '../../data/kits.ts';
 
 /**
  * A football shirt, drawn rather than photographed.
@@ -12,12 +12,11 @@ import type { Kit as KitStrip } from '../../data/kits.ts';
  * change strip, and whatever a side is actually wearing in a given match.
  */
 
-export type KitPattern = 'solid' | 'stripes' | 'half' | 'sash' | 'hoops';
-
 let uid = 0;
 
-export function Kit({ kit, pattern = 'solid', size = 88, sponsor, label }: {
+export function Kit({ kit, pattern, size = 88, sponsor, label }: {
   kit: KitStrip;
+  /** override the strip's own pattern; the strip's wins when this is omitted */
   pattern?: KitPattern;
   size?: number;
   /** the shirt front wordmark, once the club has sold the space */
@@ -28,6 +27,9 @@ export function Kit({ kit, pattern = 'solid', size = 88, sponsor, label }: {
   // gradients and clips are referenced by id, so two shirts on one screen must
   // not share them
   const id = `k${(uid = (uid + 1) % 100000)}`;
+  // the strip carries its own pattern (a white change kit is striped); an
+  // explicit prop can still override it
+  const pat = pattern ?? kit.pattern ?? 'solid';
 
   return (
     <svg viewBox="0 0 100 108" width={size} height={size * 1.08}
@@ -49,14 +51,14 @@ export function Kit({ kit, pattern = 'solid', size = 88, sponsor, label }: {
       <path d={SHIRT} fill={kit.shirt} />
 
       <g clipPath={`url(#${id}-c)`}>
-        {pattern === 'stripes' && [12, 28, 44, 60, 76].map(x => (
+        {pat === 'stripes' && [12, 28, 44, 60, 76].map(x => (
           <rect key={x} x={x} y="0" width="8.5" height="108" fill={kit.trim} opacity=".9" />
         ))}
-        {pattern === 'hoops' && [20, 42, 64, 86].map(y => (
+        {pat === 'hoops' && [20, 42, 64, 86].map(y => (
           <rect key={y} x="0" y={y} width="100" height="10" fill={kit.trim} opacity=".9" />
         ))}
-        {pattern === 'half' && <rect x="50" y="0" width="50" height="108" fill={kit.trim} opacity=".9" />}
-        {pattern === 'sash' && <path d="M2 14 L38 4 L98 92 L64 104 Z" fill={kit.trim} opacity=".88" />}
+        {pat === 'half' && <rect x="50" y="0" width="50" height="108" fill={kit.trim} opacity=".9" />}
+        {pat === 'sash' && <path d="M2 14 L38 4 L98 92 L64 104 Z" fill={kit.trim} opacity=".88" />}
         <rect x="0" y="0" width="100" height="108" fill={`url(#${id}-sh)`} />
       </g>
 
