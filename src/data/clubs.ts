@@ -31,6 +31,9 @@ export interface Club {
   accent: string;
   shape: CrestShape;
   pattern: CrestPattern;
+  /** the manager's chosen shirt pattern, when he picked one; else the shirt
+   *  follows the crest pattern. Only the player's own club carries this. */
+  kitPattern?: 'solid' | 'stripes' | 'half' | 'sash' | 'hoops';
   founded: number;
   tier: number;
   /** one line personality, shown on the pick screen */

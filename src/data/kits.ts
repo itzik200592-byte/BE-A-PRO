@@ -10,7 +10,7 @@
  * "red vs dark red" both count as a clash while green vs red does not.
  */
 
-import type { Club } from './clubs.ts';
+import type { Club, CrestPattern } from './clubs.ts';
 
 /** How the shirt front is broken up, when it is not one flat colour. */
 export type KitPattern = 'solid' | 'stripes' | 'half' | 'sash' | 'hoops';
@@ -25,8 +25,17 @@ export interface Kit {
 }
 
 /** A home strip from a pair of colours, club or not yet a club. */
-export function homeOf(primary: string, accent: string): Kit {
-  return { shirt: primary, trim: accent };
+export function homeOf(primary: string, accent: string, pattern?: KitPattern): Kit {
+  return { shirt: primary, trim: accent, pattern };
+}
+
+/**
+ * The crest pattern a club already carries, read as a shirt pattern, so every
+ * club's shirt matches the style of its badge for free. Chevron has no shirt
+ * equivalent, so it borrows hoops.
+ */
+export function crestToKit(p: CrestPattern): KitPattern {
+  return p === 'chevron' ? 'hoops' : p;
 }
 
 /**
@@ -44,7 +53,11 @@ export function awayOf(primary: string): Kit {
 
 /** A club's home strip, straight from its identity. */
 export function homeKit(club: Club): Kit {
-  return homeOf(club.primary, club.accent);
+  // the manager's own chosen pattern wins; otherwise the shirt takes the style
+  // of the badge, so a club with a striped crest wears a striped shirt
+  const pattern = (club as Club & { kitPattern?: KitPattern }).kitPattern
+    ?? crestToKit(club.pattern);
+  return homeOf(club.primary, club.accent, pattern);
 }
 
 /**

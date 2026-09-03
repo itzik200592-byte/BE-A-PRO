@@ -10,6 +10,7 @@ import { initLeague, applyResult, sortedTable, buildFixtures, emptyTable } from 
 import { LEAGUE_C, isDerby, LEAGUE_NAMES, setDerbies, derbiesFromClubs } from '../data/clubs.ts';
 import { buildRegionLeague, buildSiblingLeague, siblingClub } from '../data/cities.ts';
 import { kitColor, type KitColorId } from '../data/palette.ts';
+import type { KitPattern } from '../data/kits.ts';
 import { debtState, debtLine, debtLimit } from './finance.ts';
 import { emptyYouth, seedYouth, advanceYouth } from './youth.ts';
 import type { Youth } from './youth.ts';
@@ -416,14 +417,18 @@ export function setArchetype(gs: GameState, id: ManagerId): GameState {
  * seven nearest real towns, and the club of your city becomes yours. This is
  * the belonging hook, so the whole region is real, not a menu of invented names.
  */
-export function pickCity(gs: GameState, cityName: string, kit?: KitColorId): GameState {
+export function pickCity(gs: GameState, cityName: string, kit?: KitColorId, pattern?: KitPattern): GameState {
   const region = buildRegionLeague(cityName, 1);
   setDerbies(derbiesFromClubs(region.clubs));
-  // the manager's chosen colours become the club's, so the crest, the shirts
-  // and the dots on the pitch all follow from one choice
-  const clubs = kit
+  // the manager's chosen colours and pattern become the club's, so the crest,
+  // the shirts and the dots on the pitch all follow from one choice
+  const clubs = (kit || pattern)
     ? region.clubs.map(c => (c.id === region.myId
-        ? { ...c, primary: kitColor(kit).hex, accent: kitColor(kit).trim }
+        ? {
+            ...c,
+            ...(kit ? { primary: kitColor(kit).hex, accent: kitColor(kit).trim } : {}),
+            ...(pattern ? { kitPattern: pattern } : {}),
+          }
         : c))
     : region.clubs;
   const league = initLeague(clubs, gs.seasonSeed);

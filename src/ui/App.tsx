@@ -104,7 +104,7 @@ export function App() {
         <OnboardManager gs={gs} onDone={p => setGs(G.setProfile(gs, p))} />
       )}
       {gs.phase === 'onboard-club' && (
-        <OnboardClub gs={gs} onPick={(city, kit) => setGs(G.pickCity(gs, city, kit))} />
+        <OnboardClub gs={gs} onPick={(city, kit, pattern) => setGs(G.pickCity(gs, city, kit, pattern))} />
       )}
       {gs.phase === 'signing' && (
         <SigningScreen gs={gs} onDone={effect => setGs(G.afterSigning(gs, effect))} />

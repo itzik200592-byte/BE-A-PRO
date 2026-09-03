@@ -3,7 +3,7 @@
  * and no fixture is ever two shirts you cannot tell apart.
  *   node --experimental-strip-types scripts/kit-check.mts
  */
-import { matchKits, clash, homeOf, awayOf } from '../src/data/kits.ts';
+import { matchKits, clash, homeOf, awayOf, homeKit, crestToKit } from '../src/data/kits.ts';
 import { KIT_COLORS, kitColor, nearestKitColor } from '../src/data/palette.ts';
 import { CITIES, clubFromCity } from '../src/data/cities.ts';
 import * as G from '../src/game/state.ts';
@@ -43,6 +43,27 @@ for (const a of KIT_COLORS) {
   const patternSetsApart = !!away.pattern && away.pattern !== 'solid';
   if (sameColour && !patternSetsApart)
     fails.push(`${a.id}: home and away kit look the same`);
+}
+
+/* 2c. the manager's chosen pattern reaches his club's shirt, and a club that
+       chose nothing wears a shirt in the style of its own crest, for free */
+{
+  let gs = G.newGame(4242);
+  gs = G.setProfile(gs, { name: 'בדיקה', nickname: '', type: 'hunter', age: 40 } as never);
+  gs = G.pickCity(gs, 'רמת גן', 'blue', 'stripes');
+  const me = gs.league.clubs.find(c => c.id === gs.clubId)!;
+  if (homeKit(me).pattern !== 'stripes')
+    fails.push(`the chosen pattern did not reach the shirt (got ${homeKit(me).pattern})`);
+  // a rival wears its crest style, mapped to a shirt pattern
+  const rival = gs.league.clubs.find(c => c.id !== gs.clubId)!;
+  const want = crestToKit(rival.pattern);
+  if (homeKit(rival).pattern !== want)
+    fails.push(`a rival's shirt (${homeKit(rival).pattern}) does not follow its crest (${want})`);
+  // every kit pattern is one the shirt component can draw
+  const drawable = new Set(['solid', 'stripes', 'half', 'sash', 'hoops']);
+  for (const c of gs.league.clubs)
+    if (!drawable.has(homeKit(c).pattern ?? 'solid'))
+      fails.push(`${c.short}: shirt pattern ${homeKit(c).pattern} is not drawable`);
 }
 
 /* 3. the manager's choice actually becomes the club's colours */
@@ -111,7 +132,7 @@ for (const [file, where] of SHOWN) {
 const ob = readFileSync('src/ui/screens/Onboard.tsx', 'utf8');
 if (!ob.includes('disabled={!kit}'))
   fails.push('the club screen would continue without a colour being chosen');
-if (!ob.includes('onPick(chosen!.name, kit)'))
+if (!ob.includes('onPick(chosen!.name, kit,'))
   fails.push('the club screen passes something other than the tapped colour');
 
 console.log(`${pairs} fixtures across ${clubs.length} clubs, ${changed} away changes, 0 unreadable`);

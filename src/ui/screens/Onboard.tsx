@@ -5,7 +5,7 @@ import type { ManagerId } from '../../data/managers.ts';
 import { searchCities, findCity, buildRegionLeague, clubFromCity } from '../../data/cities.ts';
 import { KIT_COLORS, kitColor, nearestKitColor, type KitColorId } from '../../data/palette.ts';
 import { Kit } from '../components/Kit.tsx';
-import { homeOf, awayOf } from '../../data/kits.ts';
+import { homeOf, awayOf, type KitPattern } from '../../data/kits.ts';
 import type { City } from '../../data/cities.ts';
 import { Crest } from '../components/Crest.tsx';
 import { Icon } from '../components/Icon.tsx';
@@ -90,12 +90,23 @@ export function OnboardManager({ gs, onDone }: { gs: G.GameState; onDone: (p: G.
  * the team you manage is the belonging hook. The whole bottom division is then
  * built from the real towns around you, so it is your actual corner of the map.
  */
-export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: string, kit: KitColorId) => void }) {
+/** the shirt designs a manager can choose, each with what to call it */
+const PATTERNS: { id: KitPattern; name: string }[] = [
+  { id: 'solid', name: 'חלק' },
+  { id: 'stripes', name: 'פסים' },
+  { id: 'hoops', name: 'חישוקים' },
+  { id: 'sash', name: 'אלכסון' },
+  { id: 'half', name: 'חצי' },
+];
+
+export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: string, kit: KitColorId, pattern: KitPattern) => void }) {
   const [q, setQ] = useState('');
   const [chosen, setChosen] = useState<City | null>(null);
   // null means "whatever the town's club already wears", so a manager who does
   // not care never has to choose
   const [kit, setKit] = useState<KitColorId | null>(null);
+  // the shirt design, defaulting to a plain shirt until he says otherwise
+  const [pattern, setPattern] = useState<KitPattern>('solid');
 
   const results = useMemo(() => (chosen ? [] : searchCities(q, 7)), [q, chosen]);
 
@@ -118,8 +129,8 @@ export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: st
   const colour = kit ? kitColor(kit) : tradition;
   const shown = preview && colour ? { ...preview.me, primary: colour.hex, accent: colour.trim } : preview?.me;
 
-  function choose(c: City) { setChosen(c); setQ(c.name); setKit(null); }
-  function reset() { setChosen(null); setQ(''); setKit(null); }
+  function choose(c: City) { setChosen(c); setQ(c.name); setKit(null); setPattern('solid'); }
+  function reset() { setChosen(null); setQ(''); setKit(null); setPattern('solid'); }
 
   return (
     <div className="screen pad stack pad-b" style={{ gap: 14 }}>
@@ -208,7 +219,7 @@ export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: st
             </p>
             <div className="row" style={{ gap: 16, justifyContent: 'center', marginBottom: 12, opacity: kit ? 1 : 0.55, transition: 'opacity .2s' }}>
               <div className="stack" style={{ gap: 5, alignItems: 'center' }}>
-                <Kit kit={homeOf(colour!.hex, colour!.trim)} size={86} label={`מדי בית ${colour!.name}`} />
+                <Kit kit={homeOf(colour!.hex, colour!.trim, pattern)} size={86} label={`מדי בית ${colour!.name}`} />
                 <span className="sub" style={{ fontSize: 11.5 }}>בית</span>
               </div>
               <div className="stack" style={{ gap: 5, alignItems: 'center' }}>
@@ -245,11 +256,38 @@ export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: st
                 {colour!.name}{kit === tradition!.id ? ', כמו שהעיר תמיד שיחקה' : ''}.
               </p>
             )}
+
+            {/* the design of the shirt, once a colour is on it. Each option is
+                the chosen colour drawn in that pattern, so it is a real preview,
+                not a word */}
+            {kit && (
+              <div style={{ marginTop: 15 }}>
+                <div className="label-cap" style={{ marginBottom: 9, textAlign: 'center' }}>הדוגמה של החולצה</div>
+                <div className="row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {PATTERNS.map(pt => {
+                    const on = pattern === pt.id;
+                    return (
+                      <button key={pt.id} onClick={() => setPattern(pt.id)}
+                        aria-label={pt.name} aria-pressed={on}
+                        className="stack"
+                        style={{
+                          gap: 3, alignItems: 'center', padding: '6px 4px 4px', background: 'transparent',
+                          borderRadius: 11,
+                          border: on ? '2px solid var(--gold)' : '1.5px solid rgba(255,255,255,.1)',
+                        }}>
+                        <Kit kit={homeOf(colour!.hex, colour!.trim, pt.id)} size={40} />
+                        <span className="sub" style={{ fontSize: 10.5, color: on ? 'var(--gold-hi)' : 'var(--ink-faint)' }}>{pt.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           <button className="btn" disabled={!kit}
             style={{ marginTop: 16, opacity: kit ? 1 : 0.4 }}
-            onClick={() => kit && onPick(chosen!.name, kit)}>
+            onClick={() => kit && onPick(chosen!.name, kit, pattern)}>
             {kit ? `קח אותי ל${preview.me.short} ‹` : 'בחר צבע קודם'}
           </button>
         </div>
