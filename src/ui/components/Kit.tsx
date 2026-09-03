@@ -1,0 +1,95 @@
+import type { KitColor } from '../../data/palette.ts';
+
+/**
+ * A football shirt, drawn rather than photographed.
+ *
+ * A kit is a simple shape: body, sleeves, collar, and a pattern across the
+ * front. Drawing it means every colour and every pattern exists for free, the
+ * whole set weighs a couple of kilobytes, and no club can ever be missing its
+ * artwork, which matters when the town list grows past a thousand.
+ */
+
+export type KitPattern = 'solid' | 'stripes' | 'half' | 'sash' | 'hoops';
+
+export function Kit({ color, pattern = 'solid', size = 88, sponsor, away = false }: {
+  color: KitColor;
+  pattern?: KitPattern;
+  size?: number;
+  /** the shirt front wordmark, once the club has sold the space */
+  sponsor?: string;
+  /** an away shirt inverts: the club colour becomes the trim on a neutral body */
+  away?: boolean;
+}) {
+  const body = away ? (isLight(color.hex) ? '#1b1f27' : '#f2f5f8') : color.hex;
+  const trim = away ? color.hex : color.trim;
+  const id = `k${color.id}${away ? 'a' : 'h'}${pattern}`;
+
+  return (
+    <svg viewBox="0 0 100 108" width={size} height={size * 1.08}
+      aria-label={`מדי ${away ? 'חוץ' : 'בית'} ${color.name}`}>
+      <defs>
+        {/* the pattern is clipped to the shirt, so stripes stop at the seam */}
+        <clipPath id={`${id}-c`}><path d={SHIRT} /></clipPath>
+        {/* a roll of shade at each edge, so a flat shape reads as cloth */}
+        <linearGradient id={`${id}-sh`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#000" stopOpacity=".26" />
+          <stop offset=".22" stopColor="#000" stopOpacity="0" />
+          <stop offset=".5" stopColor="#fff" stopOpacity=".07" />
+          <stop offset=".78" stopColor="#000" stopOpacity="0" />
+          <stop offset="1" stopColor="#000" stopOpacity=".3" />
+        </linearGradient>
+      </defs>
+
+      <path d={SHIRT} fill={body} />
+
+      <g clipPath={`url(#${id}-c)`}>
+        {pattern === 'stripes' && [12, 28, 44, 60, 76].map(x => (
+          <rect key={x} x={x} y="0" width="8.5" height="108" fill={trim} opacity=".9" />
+        ))}
+        {pattern === 'hoops' && [20, 42, 64, 86].map(y => (
+          <rect key={y} x="0" y={y} width="100" height="10" fill={trim} opacity=".9" />
+        ))}
+        {pattern === 'half' && <rect x="50" y="0" width="50" height="108" fill={trim} opacity=".9" />}
+        {pattern === 'sash' && <path d="M2 14 L38 4 L98 92 L64 104 Z" fill={trim} opacity=".88" />}
+        <rect x="0" y="0" width="100" height="108" fill={`url(#${id}-sh)`} />
+      </g>
+
+      {/* the seam where the sleeve meets the body, which is most of what makes
+          a shirt read as a shirt rather than a blob */}
+      <path d="M28 11 Q31 30 27 48" fill="none" stroke="rgba(0,0,0,.16)" strokeWidth="1.2" />
+      <path d="M72 11 Q69 30 73 48" fill="none" stroke="rgba(0,0,0,.16)" strokeWidth="1.2" />
+
+      {/* cuffs */}
+      <path d="M3 32 L9 55 L18 52 L12 30 Z" fill={trim} />
+      <path d="M97 32 L91 55 L82 52 L88 30 Z" fill={trim} />
+
+      {/* a crew collar, stroked along the neckline so it sits like a band */}
+      <path d="M31 9 Q50 25 69 9" fill="none" stroke={trim} strokeWidth="6" strokeLinecap="round" />
+
+      {sponsor && (
+        <text x="50" y="62" textAnchor="middle" fill={trim} fontSize="8.5" fontWeight="800"
+          letterSpacing="0.3" opacity=".92" style={{ fontFamily: 'inherit' }}>
+          {sponsor}
+        </text>
+      )}
+
+      <path d={SHIRT} fill="none" stroke="rgba(0,0,0,.3)" strokeWidth="1.3" />
+    </svg>
+  );
+}
+
+/**
+ * Body and both sleeves in one path. Shoulder, sleeve out and down, cuff, back
+ * up under the arm, body tapering to a hem with a slight curve, and a neckline
+ * dipping between the shoulders.
+ */
+const SHIRT =
+  'M31 9 L12 15 L3 32 L9 55 L20 51 L18 52 L21 101 Q50 106 79 101 L82 52 L80 51 L91 55 L97 32 L88 15 L69 9 Q50 25 31 9 Z';
+
+function isLight(hex: string): boolean {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const n = parseInt(h, 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.55;
+}

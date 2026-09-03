@@ -3,6 +3,8 @@ import * as G from '../../game/state.ts';
 import { LEAGUE_NAMES } from '../../data/clubs.ts';
 import type { ManagerId } from '../../data/managers.ts';
 import { searchCities, findCity, buildRegionLeague, clubFromCity } from '../../data/cities.ts';
+import { KIT_COLORS, kitColor, nearestKitColor, type KitColorId } from '../../data/palette.ts';
+import { Kit } from '../components/Kit.tsx';
 import type { City } from '../../data/cities.ts';
 import { Crest } from '../components/Crest.tsx';
 import { Icon } from '../components/Icon.tsx';
@@ -87,9 +89,12 @@ export function OnboardManager({ gs, onDone }: { gs: G.GameState; onDone: (p: G.
  * the team you manage is the belonging hook. The whole bottom division is then
  * built from the real towns around you, so it is your actual corner of the map.
  */
-export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: string) => void }) {
+export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: string, kit: KitColorId) => void }) {
   const [q, setQ] = useState('');
   const [chosen, setChosen] = useState<City | null>(null);
+  // null means "whatever the town's club already wears", so a manager who does
+  // not care never has to choose
+  const [kit, setKit] = useState<KitColorId | null>(null);
 
   const results = useMemo(() => (chosen ? [] : searchCities(q, 7)), [q, chosen]);
 
@@ -106,8 +111,12 @@ export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: st
     return { me, derby, rest, budget };
   }, [chosen]);
 
-  function choose(c: City) { setChosen(c); setQ(c.name); }
-  function reset() { setChosen(null); setQ(''); }
+  // the club as it will actually look, once the manager has picked
+  const colour = kit ? kitColor(kit) : preview ? nearestKitColor(preview.me.primary) : null;
+  const shown = preview && colour ? { ...preview.me, primary: colour.hex, accent: colour.trim } : preview?.me;
+
+  function choose(c: City) { setChosen(c); setQ(c.name); setKit(null); }
+  function reset() { setChosen(null); setQ(''); setKit(null); }
 
   return (
     <div className="screen pad stack pad-b" style={{ gap: 14 }}>
@@ -153,7 +162,7 @@ export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: st
       {preview && (
         <div className="tile-hero" key={preview.me.id} style={{ padding: 16, animation: 'pop .4s var(--ease-out)' }}>
           <div className="row" style={{ gap: 14 }}>
-            <div style={{ animation: 'pop .5s var(--ease-out)' }}><Crest club={preview.me} size={64} /></div>
+            <div style={{ animation: 'pop .5s var(--ease-out)' }}><Crest club={shown!} size={64} /></div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="h2" style={{ fontSize: 24, lineHeight: 1 }}>{preview.me.name}</div>
               <div className="sub" style={{ fontSize: 13.5, marginTop: 4 }}>{chosen!.name} · {LEAGUE_NAMES[1]} · נוסד <span className="num">{preview.me.founded}</span></div>
@@ -182,7 +191,41 @@ export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: st
             </div>
           </div>
 
-          <button className="btn" style={{ marginTop: 16 }} onClick={() => onPick(chosen!.name)}>
+          {/* the colours. Drawn, not photographed, so every colour and every
+              pattern exists without a single image file */}
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+            <div className="label-cap" style={{ marginBottom: 10 }}>הצבעים של {preview.me.short}</div>
+            <div className="row" style={{ gap: 16, justifyContent: 'center', marginBottom: 12 }}>
+              <div className="stack" style={{ gap: 5, alignItems: 'center' }}>
+                <Kit color={colour!} size={86} />
+                <span className="sub" style={{ fontSize: 11.5 }}>בית</span>
+              </div>
+              <div className="stack" style={{ gap: 5, alignItems: 'center' }}>
+                <Kit color={colour!} size={86} away />
+                <span className="sub" style={{ fontSize: 11.5 }}>חוץ</span>
+              </div>
+            </div>
+            <div className="row" style={{ gap: 7, flexWrap: 'wrap', justifyContent: 'center' }}>
+              {KIT_COLORS.map(c => {
+                const on = c.id === colour!.id;
+                return (
+                  <button key={c.id} onClick={() => setKit(c.id)} aria-label={c.name}
+                    aria-pressed={on}
+                    style={{
+                      width: 30, height: 30, borderRadius: 9, background: c.hex, padding: 0,
+                      border: on ? '2.5px solid var(--gold)' : '1.5px solid rgba(255,255,255,.16)',
+                      boxShadow: on ? '0 0 0 3px rgba(233,185,73,.2)' : 'none',
+                      transform: on ? 'scale(1.1)' : 'none', transition: 'transform .16s var(--ease-out)',
+                    }} />
+                );
+              })}
+            </div>
+            <p className="hint" style={{ margin: '10px 0 0', textAlign: 'center' }}>
+              {colour!.name}. מדי החוץ מתהפכים לבד, כך שלא תשחק אף פעם צבע נגד אותו צבע.
+            </p>
+          </div>
+
+          <button className="btn" style={{ marginTop: 16 }} onClick={() => onPick(chosen!.name, colour!.id)}>
             קח אותי ל{preview.me.short} ‹
           </button>
         </div>
