@@ -112,8 +112,10 @@ export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: st
     return { me, derby, rest, budget };
   }, [chosen]);
 
-  // the club as it will actually look, once the manager has picked
-  const colour = kit ? kitColor(kit) : preview ? nearestKitColor(preview.me.primary) : null;
+  // the town's own colour is what the shirts preview before he decides, but it
+  // is marked as a suggestion and nothing is selected until he taps one
+  const tradition = preview ? nearestKitColor(preview.me.primary) : null;
+  const colour = kit ? kitColor(kit) : tradition;
   const shown = preview && colour ? { ...preview.me, primary: colour.hex, accent: colour.trim } : preview?.me;
 
   function choose(c: City) { setChosen(c); setQ(c.name); setKit(null); }
@@ -193,10 +195,18 @@ export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: st
           </div>
 
           {/* the colours. Drawn, not photographed, so every colour and every
-              pattern exists without a single image file */}
+              pattern exists without a single image file. Nothing is selected
+              until he taps: the shirts are his decision, not the town's */}
           <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
-            <div className="label-cap" style={{ marginBottom: 10 }}>הצבעים של {preview.me.short}</div>
-            <div className="row" style={{ gap: 16, justifyContent: 'center', marginBottom: 12 }}>
+            <div className="label-cap" style={{ marginBottom: 3, color: kit ? 'var(--ink-dim)' : 'var(--gold-hi)' }}>
+              {kit ? `הצבעים של ${preview.me.short}` : 'בחר את הצבעים שלך'}
+            </div>
+            <p className="hint" style={{ margin: '0 0 11px' }}>
+              {kit
+                ? 'מדי החוץ מתהפכים לבד, כך שלא תשחק אף פעם צבע נגד אותו צבע.'
+                : `${preview.me.short} שיחקה תמיד ב${tradition!.name}. תשמור על המסורת או תבחר צבע חדש.`}
+            </p>
+            <div className="row" style={{ gap: 16, justifyContent: 'center', marginBottom: 12, opacity: kit ? 1 : 0.55, transition: 'opacity .2s' }}>
               <div className="stack" style={{ gap: 5, alignItems: 'center' }}>
                 <Kit kit={homeOf(colour!.hex, colour!.trim)} size={86} label={`מדי בית ${colour!.name}`} />
                 <span className="sub" style={{ fontSize: 11.5 }}>בית</span>
@@ -208,26 +218,39 @@ export function OnboardClub({ gs, onPick }: { gs: G.GameState; onPick: (city: st
             </div>
             <div className="row" style={{ gap: 7, flexWrap: 'wrap', justifyContent: 'center' }}>
               {KIT_COLORS.map(c => {
-                const on = c.id === colour!.id;
+                const on = kit === c.id;
+                const isTradition = !kit && c.id === tradition!.id;
                 return (
-                  <button key={c.id} onClick={() => setKit(c.id)} aria-label={c.name}
+                  <button key={c.id} onClick={() => setKit(c.id)}
+                    aria-label={isTradition ? `${c.name}, הצבע של ${preview.me.short}` : c.name}
                     aria-pressed={on}
                     style={{
                       width: 30, height: 30, borderRadius: 9, background: c.hex, padding: 0,
-                      border: on ? '2.5px solid var(--gold)' : '1.5px solid rgba(255,255,255,.16)',
+                      border: on ? '2.5px solid var(--gold)'
+                        : isTradition ? '2px dashed rgba(233,185,73,.6)'
+                        : '1.5px solid rgba(255,255,255,.16)',
                       boxShadow: on ? '0 0 0 3px rgba(233,185,73,.2)' : 'none',
                       transform: on ? 'scale(1.1)' : 'none', transition: 'transform .16s var(--ease-out)',
                     }} />
                 );
               })}
             </div>
-            <p className="hint" style={{ margin: '10px 0 0', textAlign: 'center' }}>
-              {colour!.name}. מדי החוץ מתהפכים לבד, כך שלא תשחק אף פעם צבע נגד אותו צבע.
-            </p>
+            {!kit && (
+              <p className="hint" style={{ margin: '10px 0 0', textAlign: 'center', color: 'var(--gold-hi)' }}>
+                לחץ על צבע כדי להמשיך. המסגרת המקווקוות היא הצבע של העיר.
+              </p>
+            )}
+            {kit && (
+              <p className="hint" style={{ margin: '10px 0 0', textAlign: 'center' }}>
+                {colour!.name}{kit === tradition!.id ? ', כמו שהעיר תמיד שיחקה' : ''}.
+              </p>
+            )}
           </div>
 
-          <button className="btn" style={{ marginTop: 16 }} onClick={() => onPick(chosen!.name, colour!.id)}>
-            קח אותי ל{preview.me.short} ‹
+          <button className="btn" disabled={!kit}
+            style={{ marginTop: 16, opacity: kit ? 1 : 0.4 }}
+            onClick={() => kit && onPick(chosen!.name, kit)}>
+            {kit ? `קח אותי ל${preview.me.short} ‹` : 'בחר צבע קודם'}
           </button>
         </div>
       )}

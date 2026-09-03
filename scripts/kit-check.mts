@@ -92,10 +92,20 @@ for (const [file, where] of SHOWN) {
   if (!src.includes('<Kit ')) fails.push(`no shirt on ${where} (${file})`);
 }
 
+/* 8. the colours are the manager's call, never assigned for him. The town's
+      own colour is offered as a suggestion, but the screen must wait for a tap
+      before it will move on. */
+const ob = readFileSync('src/ui/screens/Onboard.tsx', 'utf8');
+if (!ob.includes('disabled={!kit}'))
+  fails.push('the club screen would continue without a colour being chosen');
+if (!ob.includes('onPick(chosen!.name, kit)'))
+  fails.push('the club screen passes something other than the tapped colour');
+
 console.log(`${pairs} fixtures across ${clubs.length} clubs, ${changed} away changes, 0 unreadable`);
 console.log(`${KIT_COLORS.length} colours chosen through onboarding, each reaching the club`);
 console.log(`no choice keeps the town's own colour (${def.primary})`);
 console.log(`the shirt is on all ${SHOWN.length} screens it belongs on`);
+console.log('the colours wait for the manager to choose, they are never assigned');
 if (fails.length) console.log('\n  ' + fails.slice(0, 8).join('\n  '));
 console.log(fails.length ? '\nFAIL' : '\nOK, every fixture is two distinct colours and the manager\'s pick sticks');
 process.exit(fails.length ? 1 : 0);
