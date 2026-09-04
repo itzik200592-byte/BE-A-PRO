@@ -21,7 +21,8 @@
     "check:league": "node --experimental-strip-types scripts/league-check.mts",
     "check:youth": "node --experimental-strip-types scripts/youth-check.mts",
     "check:kits": "node --experimental-strip-types scripts/kit-check.mts",
-    "check:palette": "node --experimental-strip-types scripts/palette-check.mts"
+    "check:palette": "node --experimental-strip-types scripts/palette-check.mts",
+    "check:names": "node --experimental-strip-types scripts/names-check.mts"
   },
   "dependencies": {
     "react": "^18.3.1",

@@ -1,6 +1,7 @@
 import type { Club } from '../data/clubs.ts';
 import type { Squad } from '../data/squadGen.ts';
 import { makeSquad, squadAvgOvr } from '../data/squadGen.ts';
+import { sectorForCity } from '../data/names.ts';
 import { createRng } from '../engine/matchEngine.ts';
 import { leagueCeiling } from '../data/clubs.ts';
 
@@ -63,7 +64,7 @@ export function initLeague(clubs: Club[], seasonSeed: number): LeagueState {
   clubs.forEach(c => {
     // strength spread: some clubs a bit better, some worse, plus club identity
     const target = ceiling - 6 + Math.round(rng() * 10);
-    const sq = makeSquad(target, rng, c.traits);
+    const sq = makeSquad(target, rng, c.traits, sectorForCity(c.city));
     squads[c.id] = sq;
     ovr[c.id] = squadAvgOvr(sq);
   });

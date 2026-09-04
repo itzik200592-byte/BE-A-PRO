@@ -1,6 +1,6 @@
 import type { Player, Position, Rng } from '../engine/matchEngine.ts';
 import { overall } from '../engine/matchEngine.ts';
-import { makeName } from './names.ts';
+import { makeName, squadOrigins, type Origin } from './names.ts';
 import type { ClubTraits } from './clubs.ts';
 
 /** Formation slots for a starting XI plus a small bench. */
@@ -49,6 +49,7 @@ export function makePlayer(
   position: Position, base: number, rng: Rng,
   traits: ClubTraits = NEUTRAL_TRAITS,
   usedNames?: Set<string>,
+  origin?: Origin,
 ): Player {
   // club identity shifts the player's level by role
   let lvl = base;
@@ -71,7 +72,7 @@ export function makePlayer(
 
   return {
     id: nextPlayerId(),
-    name: makeName(rng, undefined, usedNames),
+    name: makeName(rng, origin, usedNames),
     position,
     attrs,
     gk,
@@ -86,10 +87,16 @@ export interface Squad {
   bench: Player[];
 }
 
-export function makeSquad(target: number, rng: Rng, traits: ClubTraits = NEUTRAL_TRAITS): Squad {
+export function makeSquad(
+  target: number, rng: Rng, traits: ClubTraits = NEUTRAL_TRAITS,
+  sector: Origin = 'jewish',
+): Squad {
   const used = new Set<string>();   // every name in a squad is unique
-  const starters = XI.map(pos => makePlayer(pos, target, rng, traits, used));
-  const bench = BENCH.map(pos => makePlayer(pos, target - 4, rng, traits, used));
+  // the whole squad is one sector, bar at most one player from the other side
+  const origins = squadOrigins(sector, XI.length + BENCH.length, rng);
+  let k = 0;
+  const starters = XI.map(pos => makePlayer(pos, target, rng, traits, used, origins[k++]));
+  const bench = BENCH.map(pos => makePlayer(pos, target - 4, rng, traits, used, origins[k++]));
   return { starters, bench };
 }
 

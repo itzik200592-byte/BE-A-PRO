@@ -13,6 +13,7 @@ import { LEAGUE_C, leagueCeiling } from '../data/clubs.ts';
 import { cityClubsForTier, regionClubs } from '../data/cities.ts';
 import type { Squad } from '../data/squadGen.ts';
 import { makePlayer, makeSquad, nextPlayerId } from '../data/squadGen.ts';
+import { majoritySector, sectorForCity } from '../data/names.ts';
 import type { Player, Rng } from '../engine/matchEngine.ts';
 import { overall, createRng } from '../engine/matchEngine.ts';
 
@@ -197,12 +198,13 @@ export function ageSquad(
 
   // youth academy fills whatever the years took, and covers any empty role
   const used = new Set([...starters, ...bench].map(p => p.name));
+  const sector = majoritySector([...starters, ...bench].map(p => p.name));
   const NEED: Player['position'][] = ['GK', 'CB', 'CM', 'ST', 'RW', 'LB'];
   let guard = 0;
   while (starters.length + bench.length < minSquad && guard++ < 12) {
     const missingGk = !starters.some(p => p.position === 'GK') && !bench.some(p => p.position === 'GK');
     const pos = missingGk ? 'GK' : NEED[guard % NEED.length];
-    const kid = makePlayer(pos, leagueCeiling(tier) - 8, rng, undefined, used);
+    const kid = makePlayer(pos, leagueCeiling(tier) - 8, rng, undefined, used, sector);
     kid.age = 17 + Math.floor(rng() * 3);
     used.add(kid.name);
     joined.push(kid.name);
@@ -234,13 +236,14 @@ export function fillWithYouth(squad: Squad, rng: Rng, tier: number, minSquad: nu
   const starters = [...squad.starters];
   const bench = [...squad.bench];
   const used = new Set([...starters, ...bench].map(p => p.name));
+  const sector = majoritySector([...starters, ...bench].map(p => p.name));
   const NEED: Player['position'][] = ['GK', 'CB', 'CM', 'ST', 'RW', 'LB'];
   const joined: string[] = [];
   let guard = 0;
   while (starters.length + bench.length < minSquad && guard++ < 12) {
     const missingGk = !starters.some(p => p.position === 'GK') && !bench.some(p => p.position === 'GK');
     const pos = missingGk ? 'GK' : NEED[guard % NEED.length];
-    const kid = makePlayer(pos, leagueCeiling(tier) - 8, rng, undefined, used);
+    const kid = makePlayer(pos, leagueCeiling(tier) - 8, rng, undefined, used, sector);
     kid.age = 17 + Math.floor(rng() * 3);
     used.add(kid.name);
     joined.push(kid.name);
@@ -481,6 +484,7 @@ function aiOffSeason(squad: Squad, rng: Rng, tier: number, minSquad: number): Sq
   const target = leagueCeiling(tier) - 5 + Math.round(rng() * 8);
   const all = [...aged.starters, ...aged.bench];
   const used = new Set(all.map(p => p.name));
+  const sector = majoritySector(all.map(p => p.name));
 
   // replace the weakest handful when the squad has slipped below the level
   const weakest = [...all].sort((a, b) => overall(a) - overall(b));
@@ -489,7 +493,7 @@ function aiOffSeason(squad: Squad, rng: Rng, tier: number, minSquad: number): Sq
     const out = weakest[i];
     if (!out) break;
     if (overall(out) >= target - 2) break;
-    const inn = makePlayer(out.position, target, rng, undefined, used);
+    const inn = makePlayer(out.position, target, rng, undefined, used, sector);
     used.add(inn.name);
     const si = aged.starters.findIndex(p => p.id === out.id);
     if (si >= 0) aged.starters[si] = inn;
@@ -628,7 +632,7 @@ export function buildNextSeason(input: {
     const existing = input.squads[c.id];
     squads[c.id] = existing && newTier === tier
       ? aiOffSeason(existing, rng, newTier, input.minSquad)
-      : makeSquad(leagueCeiling(newTier) - 5 + Math.round(rng() * 8), rng, c.traits);
+      : makeSquad(leagueCeiling(newTier) - 5 + Math.round(rng() * 8), rng, c.traits, sectorForCity(c.city));
   }
 
   return {

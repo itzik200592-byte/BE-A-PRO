@@ -652,8 +652,10 @@ export function clearYouthOutcome(gs: GameState): GameState { return { ...gs, pe
 /** Signing done, now go and look at the squad you inherited. */
 export function afterSigning(gs: GameState, effect: { morale?: number; prestige?: number }): GameState {
   // A rescued manager has already met a squad and run a club. He does not need
-  // the onboarding tour again, he needs somebody on the shirt.
-  const next = gs.crisisDone ? 'sponsor' as const : 'squad' as const;
+  // the onboarding tour again, he needs somebody on the shirt. A rescue is the
+  // one path that arrives here with a nemesis set, so that, not the incidental
+  // crisisDone, is what tells a returning manager from a first timer.
+  const next = gs.nemesis ? 'sponsor' as const : 'squad' as const;
   gs = ensureYouth(gs);
   return {
     ...gs,
