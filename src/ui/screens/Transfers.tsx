@@ -122,7 +122,10 @@ export function TransfersScreen({ gs, onSign, onSell, onBack }: {
                       <div className="row" style={{ gap: 10, padding: '10px 8px 0' }}>
                         <div style={{ flex: 1 }}>
                           <div className="sub" style={{ fontSize: 12.5 }}>מחיר</div>
-                          <div className="num" style={{ fontWeight: 900, fontSize: 16, color: ovrColor(o) }}>{formatMoney(fa.fee)}</div>
+                          {/* .num is direction:ltr, so without this the digits
+                              align left while the Hebrew label above aligns
+                              right, and the two sit at opposite ends */}
+                          <div className="num" style={{ fontWeight: 900, fontSize: 16, color: ovrColor(o), textAlign: 'right' }}>{formatMoney(fa.fee)}</div>
                         </div>
                         <button className="btn" style={{ width: 'auto', padding: '12px 22px', fontSize: 16 }}
                           disabled={!!blocked} onClick={() => openOffer(fa)}>
@@ -148,7 +151,7 @@ export function TransfersScreen({ gs, onSign, onSell, onBack }: {
                   <div className="row" style={{ gap: 10, padding: '10px 8px 0' }}>
                     <div style={{ flex: 1 }}>
                       <div className="sub" style={{ fontSize: 12.5 }}>תקבל</div>
-                      <div className="num" style={{ fontWeight: 900, fontSize: 16, color: 'var(--win)' }}>{formatMoney(sellPrice(p, myTier))}</div>
+                      <div className="num" style={{ fontWeight: 900, fontSize: 16, color: 'var(--win)', textAlign: 'right' }}>{formatMoney(sellPrice(p, myTier))}</div>
                     </div>
                     <button className="btn ghost" style={{ width: 'auto', padding: '12px 22px', fontSize: 16 }}
                       disabled={!!blocked} onClick={() => trySell(p.id)}>

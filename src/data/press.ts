@@ -111,7 +111,9 @@ const BY_RESULT: Record<PressContext['result'], QGen[]> = {
       tone: 'brutal',
       text: `ספגתם ביזיון. איך בכלל מסבירים משחק כזה לאוהדים שנסעו עד לכאן?`,
       answers: [
-        { label: 'הביזיון עליי, לא על האוהדים', effect: { prestige: +3, morale: +2 }, reply: 'לקחת את הכדור. מהלך של מנהיג.' },
+        // the fans did not play, so there is nothing for them to carry. A
+        // manager taking the blame is taking it off his players.
+        { label: 'הביזיון עליי, לא על השחקנים', effect: { prestige: +3, morale: +2 }, reply: 'לקחת את הכדור. מהלך של מנהיג.' },
         { label: 'יום כזה לא יחזור, אני מבטיח', effect: { morale: +2, prestige: -2 }, reply: 'הבטחה גדולה. עכשיו תצטרך לעמוד בה.' },
       ],
     }),
