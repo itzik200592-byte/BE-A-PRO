@@ -57,7 +57,7 @@ function season(tier: number | null, seed: number, money: number | null) {
     gs = G.commitRound(gs, res);
     low = Math.min(low, gs.meters.money);
     gs = G.continueFromResult(gs);
-    if (gs.phase === 'press') gs = G.answerPress(gs, 0);
+    while (gs.phase === 'press') gs = G.answerPress(gs, 0);
     if (gs.phase === 'chat') gs = G.closeChat(gs);
     if (gs.phase === 'season-end' || gs.sacking) break;
   }

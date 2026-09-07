@@ -76,7 +76,7 @@ function career(startMoney: number, reckless = false, seasons = 1, tier = 1) {
     gs = G.continueFromResult(gs);
     // the owner has a word before the axe, and the loop has to let him say it
     if (gs.phase === 'ultimatum') { warned = true; gs = G.advancePastPress(gs); }
-    if (gs.phase === 'press') gs = G.answerPress(gs, 0);
+    while (gs.phase === 'press') gs = G.answerPress(gs, 0);
     if (gs.phase === 'chat') gs = G.closeChat(gs);
     if (gs.phase === 'season-end') break;
   }

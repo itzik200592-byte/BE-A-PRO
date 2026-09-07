@@ -43,7 +43,7 @@ function season(gs: G.GameState): G.GameState {
     gs = { ...gs, meters: { ...gs.meters, money: 3_000_000 }, crisisDone: true };
     gs = G.continueFromResult(gs);
     if (gs.phase === 'ultimatum') gs = G.advancePastPress(gs);
-    if (gs.phase === 'press') gs = G.answerPress(gs, w % 3);
+    while (gs.phase === 'press') gs = G.answerPress(gs, w % 3);
     if (gs.phase === 'chat') gs = G.closeChat(gs);
     if (gs.phase === 'season-end') break;
   }

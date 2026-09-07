@@ -73,7 +73,7 @@ function career(seed: number, deal: SponsorId) {
       gs = G.commitRound(gs, res);
       lowest = Math.min(lowest, gs.meters.money);
       gs = G.continueFromResult(gs);
-      if (gs.phase === 'press') gs = G.answerPress(gs, w % 3);
+      while (gs.phase === 'press') gs = G.answerPress(gs, w % 3);
       if (gs.phase === 'chat') gs = G.closeChat(gs);
       if (gs.sacking) break;
       if (gs.phase === 'season-end') break;

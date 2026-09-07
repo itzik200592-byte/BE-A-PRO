@@ -72,7 +72,7 @@ function start(tier: number, money: number): G.GameState {
     if (gs.phase !== 'result') break;
     gs = G.continueFromResult(gs);
     if (gs.phase === 'ultimatum') gs = G.advancePastPress(gs);
-    if (gs.phase === 'press') gs = G.answerPress(gs, 0);
+    while (gs.phase === 'press') gs = G.answerPress(gs, 0);
     if (gs.phase === 'chat') gs = G.closeChat(gs);
     if (gs.phase === 'season-end') break;
     void before;
@@ -89,7 +89,7 @@ function start(tier: number, money: number): G.GameState {
   check('the owner delivers the ultimatum', gs.phase === 'ultimatum', `phase ${gs.phase}`);
   const season = gs.ultimatumSeason;
   gs = G.advancePastPress(gs);
-  if (gs.phase === 'press') gs = G.answerPress(gs, 0);
+  while (gs.phase === 'press') gs = G.answerPress(gs, 0);
   if (gs.phase === 'chat') gs = G.closeChat(gs);
   gs = play(gs, 2);
   gs = G.continueFromResult(gs);
@@ -105,7 +105,7 @@ function start(tier: number, money: number): G.GameState {
     gs = play(gs, guard);
     gs = G.continueFromResult(gs);
     if (gs.phase === 'ultimatum') gs = G.advancePastPress(gs);
-    if (gs.phase === 'press') gs = G.answerPress(gs, 0);
+    while (gs.phase === 'press') gs = G.answerPress(gs, 0);
     if (gs.phase === 'chat') gs = G.closeChat(gs);
     if (gs.phase === 'season-end') break;
   }
@@ -152,7 +152,7 @@ function start(tier: number, money: number): G.GameState {
     gs = { ...gs, meters: { ...gs.meters, money: 5_000_000 } };   // money is not the test here
     gs = G.continueFromResult(gs);
     if (gs.phase === 'ultimatum') gs = G.advancePastPress(gs);
-    if (gs.phase === 'press') gs = G.answerPress(gs, 0);
+    while (gs.phase === 'press') gs = G.answerPress(gs, 0);
     if (gs.phase === 'chat') gs = G.closeChat(gs);
     if (gs.phase === 'season-end') break;
   }
@@ -199,7 +199,7 @@ function start(tier: number, money: number): G.GameState {
     gs = play(gs, 900 + guard);
     gs = G.continueFromResult(gs);
     if (gs.phase === 'ultimatum') gs = G.advancePastPress(gs);
-    if (gs.phase === 'press') gs = G.answerPress(gs, 0);
+    while (gs.phase === 'press') gs = G.answerPress(gs, 0);
     if (gs.phase === 'chat') gs = G.closeChat(gs);
     if (gs.phase === 'season-end') break;
   }

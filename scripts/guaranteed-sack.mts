@@ -70,7 +70,7 @@ function career(seed: number, city: string): Run {
       }
       gs = G.continueFromResult(gs);
       if (gs.phase === 'ultimatum') { sawUltimatum = true; gs = G.advancePastPress(gs); }
-      if (gs.phase === 'press') gs = G.answerPress(gs, w % 3);
+      while (gs.phase === 'press') gs = G.answerPress(gs, w % 3);
       if (gs.phase === 'chat') gs = G.closeChat(gs);
       if (gs.phase === 'sacked') break;
       if (gs.phase === 'season-end') break;
@@ -128,7 +128,7 @@ function lowerDivisionsStaySafe(): string[] {
         gs = G.commitRound(gs, res);
         gs = G.continueFromResult(gs);
         if (gs.phase === 'ultimatum') gs = G.advancePastPress(gs);
-        if (gs.phase === 'press') gs = G.answerPress(gs, 0);
+        while (gs.phase === 'press') gs = G.answerPress(gs, 0);
         if (gs.phase === 'chat') gs = G.closeChat(gs);
         if (gs.phase === 'season-end' || gs.sacking) break;
       }

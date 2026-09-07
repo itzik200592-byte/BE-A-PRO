@@ -212,7 +212,7 @@ export function App() {
         <MatchBroadcast gs={gs} onDone={result => setGs(G.commitRound(gs, result))} />
       )}
       {gs.phase === 'result' && <ResultScreen gs={gs} onContinue={() => setGs(G.continueFromResult(gs))} />}
-      {gs.phase === 'press' && <PressScreen gs={gs} onAnswer={i => setGs(G.answerPress(gs, i))} />}
+      {gs.phase === 'press' && <PressScreen key={gs.press?.q.text} gs={gs} onAnswer={i => setGs(G.answerPress(gs, i))} />}
       {gs.phase === 'chat' && <ChatScreen gs={gs} onDone={() => setGs(G.closeChat(gs))} />}
       {gs.phase === 'table' && <StandingsScreen gs={gs} onBack={() => setGs(G.closeTable(gs))} />}
       {gs.phase === 'season-end' && <SeasonEnd gs={gs} onContinue={() => setGs(G.startNextSeason(gs))} />}

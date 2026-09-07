@@ -16,13 +16,18 @@ export function PressScreen({ gs, onAnswer }: { gs: G.GameState; onAnswer: (i: n
   const [picked, setPicked] = useState<number | null>(null);
   const answered = picked !== null;
   const reply = answered ? q.answers[picked!].reply : null;
+  // more of the conference to come, so the button says so rather than
+  // promising the manager he is done
+  const more = (press.queue?.length ?? 0) > 0;
 
   return (
     <>
       <Meters {...gs.meters} gems={gs.gems} />
       <div className="screen pad stack pad-b" style={{ gap: 14 }}>
         <div className="row" style={{ marginTop: 4, justifyContent: 'space-between' }}>
-          <span className="eyebrow">מסיבת עיתונאים</span>
+          <span className="eyebrow">
+            מסיבת עיתונאים{more ? ' · שאלה ראשונה' : press.queue ? ' · שאלה אחרונה' : ''}
+          </span>
           <span className="chip" style={{ background: tone.bg, color: tone.color }}>{tone.label}</span>
         </div>
 
@@ -63,7 +68,9 @@ export function PressScreen({ gs, onAnswer }: { gs: G.GameState; onAnswer: (i: n
               {reply}
             </div>
             <div className="spacer" />
-            <button className="btn" onClick={() => onAnswer(picked!)}>סיום, {gs.seasonOver ? 'לסיכום העונה' : 'למחזור הבא'} ‹</button>
+            <button className="btn" onClick={() => onAnswer(picked!)}>
+              {more ? 'יש לו עוד שאלה ‹' : `סיום, ${gs.seasonOver ? 'לסיכום העונה' : 'למחזור הבא'} ‹`}
+            </button>
           </>
         )}
       </div>

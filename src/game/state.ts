@@ -27,6 +27,8 @@ import type { FormationId } from '../data/formations.ts';
 import { TEMPLATES, eligible, rollDilemma } from '../data/dilemmas.ts';
 import type { RolledDilemma, DilemmaEffect, Ctx as DilemmaCtx } from '../data/dilemmas.ts';
 import { pickPressQuestion } from '../data/press.ts';
+import { pickPressQuestions } from '../data/pressFacts.ts';
+import { matchFacts } from '../data/matchFacts.ts';
 import { pickTrigger, rollChat } from '../data/chats.ts';
 import type { RolledChat } from '../data/chats.ts';
 import { fanMessage } from '../data/fans.ts';
@@ -197,7 +199,10 @@ export interface GameState {
   pendingOutcome: string | null;
   lastPlayerMatch: MatchResult | null;
   lastRound: RoundResult[];
-  press: { outlet: Outlet; q: PressQuestion } | null;
+  /** the question on screen, plus whatever the reporter still has waiting.
+   *  q is kept as the current one so a save written before the second question
+   *  existed still opens on a valid press room. */
+  press: { outlet: Outlet; q: PressQuestion; queue?: PressQuestion[] } | null;
   /** set the moment the owner ends it, and never cleared: the career is over */
   sacking: Sacking | null;
   /** the shirt deal for this season, re-negotiated every summer */
@@ -2095,7 +2100,11 @@ export function continueFromResult(gs: GameState): GameState {
     city: club(gs).city,
   };
   const rng = createRng(gs.seasonSeed * 100 + gs.week * 31 + 5)();
-  return { ...gs, phase: 'press', press: pickPressQuestion(ctx, rng) };
+  // what the reporter actually watched, so his first question is about the
+  // match and not about the scoreline in the abstract
+  const facts = matchFacts(r, gs.clubId, mySquad(gs));
+  const { outlet, qs } = pickPressQuestions(ctx, rng, facts);
+  return { ...gs, phase: 'press', press: { outlet, q: qs[0], queue: qs.slice(1) } };
 }
 
 /** Apply the manager's answer to the reporter, then move on. */
@@ -2109,7 +2118,18 @@ export function answerPress(gs: GameState, index: number): GameState {
         prestige: meter(gs.meters.prestige + (ans.effect.prestige ?? 0)),
       }
     : gs.meters;
-  return advancePastPress({ ...gs, meters, style: ans ? scoreStyle(gs.style, ans.effect) : gs.style });
+  const style = ans ? scoreStyle(gs.style, ans.effect) : gs.style;
+  // he has another one. A press conference is not one question and out.
+  const rest = gs.press?.queue ?? [];
+  if (rest.length) {
+    return { ...gs, meters, style, press: { outlet: gs.press!.outlet, q: rest[0], queue: rest.slice(1) } };
+  }
+  return advancePastPress({ ...gs, meters, style });
+}
+
+/** How many questions are left, including the one on screen. */
+export function pressRemaining(gs: GameState): number {
+  return gs.press ? 1 + (gs.press.queue?.length ?? 0) : 0;
 }
 
 /** Where the week actually ends, once the phone has had its say. */
@@ -2181,7 +2201,7 @@ export function demoSeason(rounds = 8): GameState {
       inp.seed);
     gs = commitRound(gs, res);
     gs = continueFromResult(gs);
-    if (gs.phase === 'press') gs = answerPress(gs, 0);
+    while (gs.phase === 'press') gs = answerPress(gs, 0);
     if (gs.phase === 'chat') gs = closeChat(gs);
     if (gs.phase === 'season-end') break;
   }
