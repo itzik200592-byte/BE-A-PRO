@@ -7,6 +7,7 @@ import { assignTraits } from '../../data/personalities.ts';
 import { Meters, formatMoney } from '../components/bits.tsx';
 import { PlayerCard } from '../components/PlayerCard.tsx';
 import { Portal } from '../components/Portal.tsx';
+import { Icon } from '../components/Icon.tsx';
 import { PlayerRow, ovrColor, LINE_OF, LINE_LABEL } from './Squad.tsx';
 import { MAX_SQUAD, MIN_SQUAD, sellPrice, contractTerms } from '../../game/transfers.ts';
 import type { FreeAgent } from '../../game/transfers.ts';
@@ -116,9 +117,32 @@ export function TransfersScreen({ gs, onSign, onSell, onBack }: {
                   const o = overall(fa.player);
                   const blocked = G.signBlockedReason(gs, fa);
                   return (
-                    <div key={fa.player.id} className="tile" style={{ padding: '4px 10px 12px' }}>
+                    <div key={fa.player.id} className="tile" style={{
+                      padding: '4px 10px 12px',
+                      // the one big name of the summer wears it
+                      ...(fa.marquee ? {
+                        borderColor: 'var(--gold)',
+                        background: 'linear-gradient(180deg, rgba(233,185,73,.10), var(--surface))',
+                      } : {}),
+                    }}>
+                      {(fa.marquee || fa.leaving) && (
+                        <div className="row" style={{ gap: 6, padding: '8px 8px 0' }}>
+                          {fa.marquee && (
+                            <span className="chip" style={{ background: 'rgba(233,185,73,.18)', color: 'var(--gold-hi)', fontWeight: 800 }}>
+                              <Icon name="star" size={12} /> הכוכב של הקיץ
+                            </span>
+                          )}
+                          {fa.leaving && (
+                            <span className="chip" style={{ background: 'rgba(255,90,95,.14)', color: 'var(--loss)', fontWeight: 800 }}>
+                              מחזור אחרון
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <PlayerRow p={fa.player} traits={marketTraits.get(fa.player.id) ?? []} onOpen={() => setCard(fa.player)} />
-                      <p className="hint" style={{ padding: '0 8px' }}>{fa.note}</p>
+                      <p className="hint" style={{ padding: '0 8px' }}>
+                        {fa.note}{fa.leaving ? '. קבוצה אחרת סוגרת איתו, אחרי המחזור הזה הוא לא כאן' : ''}
+                      </p>
                       <div className="row" style={{ gap: 10, padding: '10px 8px 0' }}>
                         <div style={{ flex: 1 }}>
                           <div className="sub" style={{ fontSize: 12.5 }}>מחיר</div>

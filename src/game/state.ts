@@ -35,7 +35,7 @@ import { buildFeed } from '../data/feed.ts';
 import type { FanContext, FanMessage, FanTiming } from '../data/fans.ts';
 import type { Outlet, PressQuestion, PressContext } from '../data/press.ts';
 import type { FreeAgent } from './transfers.ts';
-import { makeMarket, windowState, sellPrice, contractTerms, MIN_SQUAD, MAX_SQUAD } from './transfers.ts';
+import { makeMarket, refreshMarket, windowState, sellPrice, contractTerms, MIN_SQUAD, MAX_SQUAD } from './transfers.ts';
 import {
   PRE_ROUNDS, seedContract, contractYears, renewTerms, raiseBonus,
   starTarget, starFee, feeSweetener, youngTarget,
@@ -756,7 +756,16 @@ export function advancePreseason(gs: GameState): GameState {
     if (preseasonBlockedReason(gs)) return gs;   // contracts must be answered first
     return finishPreseason(gs);
   }
-  return { ...gs, preWeek: gs.preWeek + 1, pendingOutcome: null };
+  // the window moves on: whoever was on notice has signed elsewhere, new names
+  // come in, and the last round of the summer brings the one big name
+  const next = gs.preWeek + 1;
+  const sq = mySquad(gs);
+  const taken = new Set([...sq.starters, ...sq.bench].map(p => p.name));
+  const market = refreshMarket(
+    gs.market, club(gs).tier, createRng(gs.seasonSeed + 4100 + next * 31), taken,
+    { marquee: next >= PRE_ROUNDS },
+  );
+  return { ...gs, preWeek: next, market, pendingOutcome: null };
 }
 
 /**

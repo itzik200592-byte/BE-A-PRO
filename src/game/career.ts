@@ -260,12 +260,21 @@ export function fillWithYouth(squad: Squad, rng: Rng, tier: number, minSquad: nu
 
 /* ---------------------------------------------------------------- rewards */
 
+/**
+ * What a season in this division is worth before placing. The one figure that
+ * says how much money a club at this level sees, so anything priced against
+ * "a season" reads from here rather than inventing its own scale.
+ */
+export function purseBase(tier: number): number {
+  return [0, 150_000, 200_000, 930_000, 1_800_000, 4_500_000][Math.min(Math.max(1, Math.round(tier)), TOP_TIER)];
+}
+
 /** Season payout, it has to grow with the division or promotion bankrupts you. */
 export function seasonPurse(tier: number, position: number, teams: number, promoted = false): number {
   // recalibrated down for the weekly-wage economy. Wages are now the dominant,
   // fixed cost, so income is a participation purse that a bad season cannot
   // cover on its own, forcing you to actually run the club.
-  const base = [0, 150_000, 200_000, 930_000, 1_800_000, 4_500_000][Math.min(tier, TOP_TIER)];
+  const base = purseBase(tier);
   const share = 1 + (teams - position) * 0.12;   // finishing higher pays more
   // going up brings sponsors and television money, which is what funds the
   // rebuild you now urgently need for a division that is a level above you
