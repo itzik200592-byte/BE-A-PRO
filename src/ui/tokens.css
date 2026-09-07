@@ -852,3 +852,66 @@ input{font-family:inherit;}
   color: var(--ink-faint); background: rgba(255,255,255,.06);
   border-radius: 5px; padding: 1px 5px;
 }
+
+/* ------------------------------------------------- the eleven on a pitch */
+.lineup-pitch{
+  position:relative; width:100%; aspect-ratio:100/140; border-radius:var(--r-md);
+  overflow:hidden; background:linear-gradient(175deg,#1d4b30,#153a25 55%,#11301e);
+  border:1px solid rgba(255,255,255,.08);
+}
+/* mown stripes, so it reads as grass and not a green box */
+.lineup-pitch::before{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:repeating-linear-gradient(180deg, rgba(255,255,255,.035) 0 7.14%, transparent 7.14% 14.28%);
+}
+.lineup-turf{position:absolute; inset:0; width:100%; height:100%;}
+
+.lineup-man{
+  /* left and transform are both physical, so no RTL compensation belongs here.
+     The earlier margin-inline-start plus a positive translate pushed the right
+     sided players clean off the touchline. */
+  position:absolute; transform:translate(-50%,-50%);
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  background:transparent; padding:0; width:56px;
+}
+.lineup-shirt{
+  position:relative; width:34px; height:34px; border-radius:50%;
+  display:grid; place-items:center; border:2px solid;
+  box-shadow:0 2px 6px rgba(0,0,0,.45);
+  transition:transform .16s var(--ease-out), box-shadow .16s var(--ease-out);
+}
+.lineup-man[data-on="1"] .lineup-shirt{
+  transform:scale(1.16);
+  box-shadow:0 0 0 3px var(--gold), 0 4px 12px rgba(0,0,0,.5);
+}
+.lineup-ovr{font-size:14px; font-weight:900; text-shadow:0 1px 2px rgba(0,0,0,.6);}
+
+.lineup-role{
+  font-size:9px; font-weight:900; letter-spacing:.03em; line-height:1;
+  padding:2px 5px; border-radius:5px; direction:ltr;
+  background:rgba(0,0,0,.5); color:rgba(255,255,255,.78);
+}
+/* a man somewhere he does not belong is the thing you must be able to see */
+.lineup-role[data-fit="covers"]{background:rgba(233,185,73,.24); color:var(--gold-hi);}
+.lineup-role[data-fit="out"]{background:rgba(226,72,77,.32); color:#ffb9bb;}
+.lineup-man[data-fit="out"] .lineup-shirt{border-style:dashed;}
+
+.lineup-name{
+  font-size:10.5px; font-weight:800; color:#fff; line-height:1.1; text-align:center;
+  max-width:56px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  text-shadow:0 1px 3px rgba(0,0,0,.9);
+}
+.lineup-cap{
+  display:inline-grid; place-items:center; width:11px; height:11px; border-radius:3px;
+  background:var(--gold); color:#1a1200; font-size:8px; font-weight:900;
+  margin-inline-end:3px; vertical-align:middle;
+}
+
+/* the bench, under the pitch */
+.bench-pick{
+  display:flex; align-items:center; gap:9px; width:100%; text-align:start;
+  padding:9px 11px; border-radius:var(--r-sm);
+  background:var(--surface); border:1px solid var(--line);
+}
+.bench-pick[data-on="1"]{border-color:var(--gold); background:rgba(233,185,73,.12);}
+.bench-pick[data-blocked="1"]{opacity:.45;}

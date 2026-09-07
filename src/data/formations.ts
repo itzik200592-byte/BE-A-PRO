@@ -16,10 +16,18 @@ import type { Player } from '../engine/matchEngine.ts';
 export type FormationId = '4-4-2' | '4-3-3' | '5-4-1';
 export type Line = 'GK' | 'DEF' | 'MID' | 'FWD';
 
+/** What a slot IS on the pitch, which is not always what its player is. */
+export type SlotRole =
+  | 'GK' | 'LB' | 'RB' | 'CB' | 'LWB' | 'RWB'
+  | 'CDM' | 'CM' | 'CAM' | 'LM' | 'RM'
+  | 'LW' | 'RW' | 'ST';
+
 export interface FormationSlot {
   d: number;
   y: number;
   line: Line;
+  /** the shirt this slot wears: RB, not "a defender" */
+  role: SlotRole;
   /** how this slot breaks shape when his team is on top, see LivePitch */
   brk?: { d: number; y: number };
 }
@@ -52,17 +60,17 @@ export const FORMATIONS: Formation[] = [
     counts: [4, 4, 2],
     att: 1.00, def: 1.00, line: 0.00,
     slots: [
-      { d: 0.00, y: 0.50, line: 'GK' },
-      { d: 0.09, y: 0.13, line: 'DEF', brk: { d: 0.52, y: -0.09 } },   // מגן שמאל עולה על הקו
-      { d: 0.00, y: 0.37, line: 'DEF', brk: { d: 0.26, y: 0.04 } },
-      { d: 0.00, y: 0.63, line: 'DEF', brk: { d: 0.26, y: -0.04 } },
-      { d: 0.09, y: 0.87, line: 'DEF', brk: { d: 0.52, y: 0.09 } },    // מגן ימין עולה על הקו
-      { d: 0.50, y: 0.11, line: 'MID', brk: { d: 0.28, y: -0.05 } },   // קשר אגף
-      { d: 0.40, y: 0.39, line: 'MID', brk: { d: 0.40, y: 0.04 } },    // ריצה מאוחרת מהאמצע
-      { d: 0.40, y: 0.61, line: 'MID', brk: { d: 0.40, y: -0.04 } },
-      { d: 0.50, y: 0.89, line: 'MID', brk: { d: 0.28, y: 0.05 } },
-      { d: 0.92, y: 0.39, line: 'FWD', brk: { d: -0.30, y: 0.06 } },   // חלוץ יורד לקבל
-      { d: 0.92, y: 0.61, line: 'FWD', brk: { d: 0.06, y: -0.06 } },
+      { d: 0.00, y: 0.50, line: 'GK', role: 'GK' },
+      { d: 0.09, y: 0.13, line: 'DEF', role: 'LB', brk: { d: 0.52, y: -0.09 } },   // מגן שמאל עולה על הקו
+      { d: 0.00, y: 0.37, line: 'DEF', role: 'CB', brk: { d: 0.26, y: 0.04 } },
+      { d: 0.00, y: 0.63, line: 'DEF', role: 'CB', brk: { d: 0.26, y: -0.04 } },
+      { d: 0.09, y: 0.87, line: 'DEF', role: 'RB', brk: { d: 0.52, y: 0.09 } },    // מגן ימין עולה על הקו
+      { d: 0.50, y: 0.11, line: 'MID', role: 'LM', brk: { d: 0.28, y: -0.05 } },   // קשר אגף
+      { d: 0.40, y: 0.39, line: 'MID', role: 'CM', brk: { d: 0.40, y: 0.04 } },    // ריצה מאוחרת מהאמצע
+      { d: 0.40, y: 0.61, line: 'MID', role: 'CM', brk: { d: 0.40, y: -0.04 } },
+      { d: 0.50, y: 0.89, line: 'MID', role: 'RM', brk: { d: 0.28, y: 0.05 } },
+      { d: 0.92, y: 0.39, line: 'FWD', role: 'ST', brk: { d: -0.30, y: 0.06 } },   // חלוץ יורד לקבל
+      { d: 0.92, y: 0.61, line: 'FWD', role: 'ST', brk: { d: 0.06, y: -0.06 } },
     ],
   },
   {
@@ -73,17 +81,17 @@ export const FORMATIONS: Formation[] = [
     counts: [4, 3, 3],
     att: 1.06, def: 0.95, line: 0.055,
     slots: [
-      { d: 0.00, y: 0.50, line: 'GK' },
-      { d: 0.10, y: 0.14, line: 'DEF', brk: { d: 0.56, y: -0.10 } },
-      { d: 0.00, y: 0.37, line: 'DEF', brk: { d: 0.28, y: 0.05 } },
-      { d: 0.00, y: 0.63, line: 'DEF', brk: { d: 0.28, y: -0.05 } },
-      { d: 0.10, y: 0.86, line: 'DEF', brk: { d: 0.56, y: 0.10 } },
-      { d: 0.52, y: 0.25, line: 'MID', brk: { d: 0.36, y: 0.05 } },
-      { d: 0.40, y: 0.50, line: 'MID', brk: { d: 0.32, y: 0.00 } },
-      { d: 0.52, y: 0.75, line: 'MID', brk: { d: 0.36, y: -0.05 } },
-      { d: 0.90, y: 0.13, line: 'FWD', brk: { d: 0.08, y: 0.20 } },    // כנף חותך פנימה
-      { d: 1.00, y: 0.50, line: 'FWD', brk: { d: -0.34, y: 0.00 } },   // חלוץ יורד
-      { d: 0.90, y: 0.87, line: 'FWD', brk: { d: 0.08, y: -0.20 } },
+      { d: 0.00, y: 0.50, line: 'GK', role: 'GK' },
+      { d: 0.10, y: 0.14, line: 'DEF', role: 'LB', brk: { d: 0.56, y: -0.10 } },
+      { d: 0.00, y: 0.37, line: 'DEF', role: 'CB', brk: { d: 0.28, y: 0.05 } },
+      { d: 0.00, y: 0.63, line: 'DEF', role: 'CB', brk: { d: 0.28, y: -0.05 } },
+      { d: 0.10, y: 0.86, line: 'DEF', role: 'RB', brk: { d: 0.56, y: 0.10 } },
+      { d: 0.52, y: 0.25, line: 'MID', role: 'CM', brk: { d: 0.36, y: 0.05 } },
+      { d: 0.40, y: 0.50, line: 'MID', role: 'CDM', brk: { d: 0.32, y: 0.00 } },
+      { d: 0.52, y: 0.75, line: 'MID', role: 'CM', brk: { d: 0.36, y: -0.05 } },
+      { d: 0.90, y: 0.13, line: 'FWD', role: 'LW', brk: { d: 0.08, y: 0.20 } },    // כנף חותך פנימה
+      { d: 1.00, y: 0.50, line: 'FWD', role: 'ST', brk: { d: -0.34, y: 0.00 } },   // חלוץ יורד
+      { d: 0.90, y: 0.87, line: 'FWD', role: 'RW', brk: { d: 0.08, y: -0.20 } },
     ],
   },
   {
@@ -94,22 +102,56 @@ export const FORMATIONS: Formation[] = [
     counts: [5, 4, 1],
     att: 0.90, def: 1.09, line: -0.065,
     slots: [
-      { d: 0.00, y: 0.50, line: 'GK' },
-      { d: 0.16, y: 0.09, line: 'DEF', brk: { d: 0.58, y: -0.05 } },   // מגן כנף רץ את כל הקו
-      { d: 0.00, y: 0.28, line: 'DEF', brk: { d: 0.20, y: 0.04 } },
-      { d: 0.00, y: 0.50, line: 'DEF', brk: { d: 0.16, y: 0.00 } },
-      { d: 0.00, y: 0.72, line: 'DEF', brk: { d: 0.20, y: -0.04 } },
-      { d: 0.16, y: 0.91, line: 'DEF', brk: { d: 0.58, y: 0.05 } },
-      { d: 0.48, y: 0.13, line: 'MID', brk: { d: 0.30, y: -0.04 } },
-      { d: 0.36, y: 0.40, line: 'MID', brk: { d: 0.34, y: 0.04 } },
-      { d: 0.36, y: 0.60, line: 'MID', brk: { d: 0.34, y: -0.04 } },
-      { d: 0.48, y: 0.87, line: 'MID', brk: { d: 0.30, y: 0.04 } },
-      { d: 0.94, y: 0.50, line: 'FWD', brk: { d: -0.26, y: 0.10 } },   // החלוץ הבודד רץ לערוצים
+      { d: 0.00, y: 0.50, line: 'GK', role: 'GK' },
+      { d: 0.16, y: 0.09, line: 'DEF', role: 'LWB', brk: { d: 0.58, y: -0.05 } },   // מגן כנף רץ את כל הקו
+      { d: 0.00, y: 0.28, line: 'DEF', role: 'CB', brk: { d: 0.20, y: 0.04 } },
+      { d: 0.00, y: 0.50, line: 'DEF', role: 'CB', brk: { d: 0.16, y: 0.00 } },
+      { d: 0.00, y: 0.72, line: 'DEF', role: 'CB', brk: { d: 0.20, y: -0.04 } },
+      { d: 0.16, y: 0.91, line: 'DEF', role: 'RWB', brk: { d: 0.58, y: 0.05 } },
+      { d: 0.48, y: 0.13, line: 'MID', role: 'LM', brk: { d: 0.30, y: -0.04 } },
+      { d: 0.36, y: 0.40, line: 'MID', role: 'CM', brk: { d: 0.34, y: 0.04 } },
+      { d: 0.36, y: 0.60, line: 'MID', role: 'CM', brk: { d: 0.34, y: -0.04 } },
+      { d: 0.48, y: 0.87, line: 'MID', role: 'RM', brk: { d: 0.30, y: 0.04 } },
+      { d: 0.94, y: 0.50, line: 'FWD', role: 'ST', brk: { d: -0.26, y: 0.10 } },   // החלוץ הבודד רץ לערוצים
     ],
   },
 ];
 
 export const DEFAULT_FORMATION: FormationId = '4-4-2';
+
+/** What each slot is called, for the manager reading his own team sheet. */
+export const ROLE_LABEL: Record<SlotRole, string> = {
+  GK: 'שוער', LB: 'מגן שמאל', RB: 'מגן ימין', CB: 'בלם',
+  LWB: 'מגן כנף שמאל', RWB: 'מגן כנף ימין',
+  CDM: 'קשר הגנתי', CM: 'קשר', CAM: 'קשר התקפי',
+  LM: 'קשר שמאל', RM: 'קשר ימין',
+  LW: 'כנף שמאל', RW: 'כנף ימין', ST: 'חלוץ',
+};
+
+/**
+ * Roles a player covers without really being out of position. A centre back at
+ * left back is stretched but recognisable; a striker there is not. Used to tell
+ * the manager which of his eleven are playing somewhere they do not belong,
+ * which is the thing a list of names can never show him.
+ */
+const NEAR: Record<SlotRole, string[]> = {
+  GK: [],
+  LB: ['LB', 'LWB', 'LM'], RB: ['RB', 'RWB', 'RM'],
+  LWB: ['LWB', 'LB', 'LM'], RWB: ['RWB', 'RB', 'RM'],
+  CB: ['CB'],
+  CDM: ['CDM', 'CM'], CM: ['CM', 'CDM', 'CAM'], CAM: ['CAM', 'CM'],
+  LM: ['LM', 'LW', 'LB', 'CM'], RM: ['RM', 'RW', 'RB', 'CM'],
+  LW: ['LW', 'LM', 'ST'], RW: ['RW', 'RM', 'ST'],
+  ST: ['ST', 'CF', 'LW', 'RW'],
+};
+
+/** How well a player suits the slot he has been put in. */
+export function roleFit(playerPos: string, role: SlotRole): 'natural' | 'covers' | 'out' {
+  if (playerPos === role) return 'natural';
+  if (NEAR[role].includes(playerPos)) return 'covers';
+  // a keeper anywhere but in goal, or an outfield player in goal, is always out
+  return 'out';
+}
 
 const BY_ID = new Map(FORMATIONS.map(f => [f.id, f]));
 
@@ -155,10 +197,63 @@ export function fillFormation(players: Player[], f: Formation): Player[] {
     return out;
   };
   const [nd, nm, nf] = f.counts;
-  return [
+  const chosen = [
     ...grab(['GK'], 1),
     ...grab(['DEF', 'MID'], nd),
     ...grab(['MID', 'FWD', 'DEF'], nm),
     ...grab(['FWD', 'MID'], nf),
   ].slice(0, 11);
+  return seatByFit(chosen, f);
+}
+
+/** natural 2, covers 1, out 0. What a pairing of man and shirt is worth. */
+function fitScore(playerPos: string, role: SlotRole): number {
+  const f = roleFit(playerPos, role);
+  return f === 'natural' ? 2 : f === 'covers' ? 1 : 0;
+}
+
+/**
+ * Sort each line so the right back is at right back.
+ *
+ * Picking WHO plays is one question, and which shirt each of them wears is
+ * another. Grabbing by line answered only the first, so a squad holding a left
+ * and a right back could line them up on the wrong sides, purely by the order
+ * they happened to sit in the list. Within a line the men are now seated by how
+ * well they fit the slot, which is cheap: a line is at most five, so every
+ * arrangement can simply be tried.
+ */
+function seatByFit(chosen: Player[], f: Formation): Player[] {
+  const out = chosen.slice();
+  const byLine = new Map<Line, number[]>();
+  f.slots.forEach((s, i) => {
+    if (i >= chosen.length) return;
+    const list = byLine.get(s.line) ?? [];
+    list.push(i);
+    byLine.set(s.line, list);
+  });
+
+  for (const idx of byLine.values()) {
+    if (idx.length < 2) continue;
+    const men = idx.map(i => chosen[i]);
+    let best: Player[] | null = null;
+    let bestScore = -1;
+    for (const order of permutations(men)) {
+      let score = 0;
+      for (let k = 0; k < idx.length; k++) score += fitScore(order[k].position, f.slots[idx[k]].role);
+      if (score > bestScore) { bestScore = score; best = order; }
+    }
+    if (best) idx.forEach((i, k) => { out[i] = best![k]; });
+  }
+  return out;
+}
+
+/** Every arrangement of a short list. A line is never more than five men. */
+function permutations<T>(xs: T[]): T[][] {
+  if (xs.length <= 1) return [xs];
+  const out: T[][] = [];
+  for (let i = 0; i < xs.length; i++) {
+    const rest = [...xs.slice(0, i), ...xs.slice(i + 1)];
+    for (const p of permutations(rest)) out.push([xs[i], ...p]);
+  }
+  return out;
 }

@@ -13,6 +13,8 @@ import { Icon } from '../components/Icon.tsx';
 import { Stepper } from '../components/Stepper.tsx';
 import { CoachGuide } from '../components/CoachGuide.tsx';
 import { PlayerCard } from '../components/PlayerCard.tsx';
+import { LineupPitch } from '../components/LineupPitch.tsx';
+import { formation, fillFormation, roleFit, ROLE_LABEL } from '../../data/formations.ts';
 
 export const LINE_OF: Record<Position, 'gk' | 'def' | 'mid' | 'atk'> = {
   GK: 'gk', CB: 'def', LB: 'def', RB: 'def',
@@ -147,15 +149,48 @@ export function SquadScreen({ gs, firstTime, onSwap, onDone }: {
   const [picked, setPicked] = useState<string | null>(null);   // a starter waiting for a sub
   const [flash, setFlash] = useState<string | null>(null);
   const [card, setCard] = useState<Player | null>(null);       // the open player card
+  const [view, setView] = useState<'pitch' | 'list'>('pitch');
 
   // one personality pass over the whole squad, so no two players repeat
   const traitMap = useMemo(() => assignTraits([...sq.starters, ...sq.bench]), [sq]);
   const tr = (p: Player): Trait[] => traitMap.get(p.id) ?? [];
   const captainId = G.currentCaptainId(gs);
 
-  const pickedPlayer = picked ? sq.starters.find(p => p.id === picked) ?? null : null;
+  const pickedPlayer = picked ? [...sq.starters, ...sq.bench].find(p => p.id === picked) ?? null : null;
   const avg = Math.round(sq.starters.reduce((s, p) => s + overall(p), 0) / sq.starters.length);
   const byLine = (line: 'gk' | 'def' | 'mid' | 'atk') => sq.starters.filter(p => LINE_OF[p.position] === line);
+
+  // the shape the manager picked, and who ends up in which shirt inside it
+  const form = formation(gs.tactic?.formation);
+  const onPitch = useMemo(() => fillFormation(sq.starters, form), [sq.starters, form]);
+  // the men in a slot that is not theirs, which is the thing a list cannot show
+  const outOfPosition = useMemo(() => onPitch
+    .map((p, i) => ({ name: p.name, pos: p.position, role: form.slots[i].role, fit: roleFit(p.position, form.slots[i].role) }))
+    .filter(x => x.fit === 'out'), [onPitch, form]);
+
+  /**
+   * One tap does everything, from either end. Nothing picked yet: this man is
+   * picked. Somebody already picked: if one of the two is on the pitch and the
+   * other on the bench, they change places; otherwise the pick simply moves.
+   * A manager should not have to know which one to press first.
+   */
+  function tap(p: Player) {
+    setFlash(null);
+    if (picked === p.id) { setPicked(null); return; }
+    const other = picked ? [...sq.starters, ...sq.bench].find(x => x.id === picked) ?? null : null;
+    if (!other) { setPicked(p.id); return; }
+
+    const onPitch = (x: Player) => sq.starters.some(s => s.id === x.id);
+    if (onPitch(other) === onPitch(p)) { setPicked(p.id); return; }   // both sides the same, just move the pick
+
+    const starter = onPitch(other) ? other : p;
+    const sub = onPitch(other) ? p : other;
+    const reason = G.swapBlockedReason(starter, sub);
+    if (reason) { setFlash(reason); return; }
+    onSwap(starter.id, sub.id);
+    setPicked(null);
+    setFlash(`${sub.name} נכנס במקום ${starter.name}.`);
+  }
 
   // the swap side icon arms a starter, then completes onto a bench player
   function armStarter(p: Player) {
@@ -194,37 +229,84 @@ export function SquadScreen({ gs, firstTime, onSwap, onDone }: {
       {firstTime && <DressingRoom sq={sq} traitMap={traitMap} onOpen={setCard} />}
 
       <div className="tile" style={{ padding: '10px 12px', background: pickedPlayer ? 'rgba(232,182,76,.12)' : 'var(--surface)', borderColor: pickedPlayer ? 'var(--gold)' : 'var(--line)' }}>
-        <div style={{ fontSize: 14.5, fontWeight: 700 }} aria-live="polite">
-          {pickedPlayer
-            ? `${pickedPlayer.name} יוצא. עכשיו לחץ על החצים שליד מי שנכנס מהספסל.`
-            : flash ?? 'לחץ על שחקן כדי לפתוח את הכרטיס שלו. החצים שבצד מחליפים הרכב.'}
+        <div className="row" style={{ gap: 10 }}>
+          {/* a fresh message wins: a refused swap has to say why, and the
+              standing "who is picked" prompt was hiding the reason */}
+          <div style={{ flex: 1, fontSize: 14.5, fontWeight: 700 }} aria-live="polite">
+            {flash
+              ?? (pickedPlayer
+                ? `${pickedPlayer.name} נבחר. לחץ על מי שמחליף אותו.`
+                : 'לחץ על שחקן במגרש או בספסל כדי להחליף ביניהם.')}
+          </div>
+          {pickedPlayer && (
+            <button className="btn ghost btn-sm" style={{ width: 'auto', padding: '7px 13px' }}
+              onClick={() => setCard(pickedPlayer)}>כרטיס</button>
+          )}
         </div>
       </div>
 
-      <div style={{ fontWeight: 800, fontSize: 13.5, color: 'var(--ink-dim)', marginTop: 2 }}>ההרכב הפותח</div>
-      {(['gk', 'def', 'mid', 'atk'] as const).map(line => (
-        <Line key={line} title={LINE_LABEL[line]} color={LINE_COLOR[line]} players={byLine(line)}
-          render={p => (
-            <PlayerRow p={p} traits={tr(p)} state={picked === p.id ? 'selected' : 'idle'}
-              captain={p.id === captainId}
-              onOpen={() => setCard(p)}
-              swap={picked === p.id ? 'armed' : 'arm'} onSwap={() => armStarter(p)} />
-          )} />
-      ))}
+      <div className="seg" role="tablist">
+        <button role="tab" aria-selected={view === 'pitch'} data-on={view === 'pitch' ? '1' : '0'} onClick={() => setView('pitch')}>המגרש</button>
+        <button role="tab" aria-selected={view === 'list'} data-on={view === 'list' ? '1' : '0'} onClick={() => setView('list')}>רשימה</button>
+      </div>
+
+      {view === 'pitch' ? (
+        <>
+          <LineupPitch formation={form} players={onPitch} kit={homeKit(c)}
+            captainId={captainId} selectedId={picked} onPick={tap} />
+          {outOfPosition.length > 0 && (
+            <p className="hint" style={{ margin: 0 }}>
+              {outOfPosition.length === 1
+                ? `${outOfPosition[0].name} משחק ${ROLE_LABEL[outOfPosition[0].role]} והוא לא ${outOfPosition[0].pos}. שקול להחליף.`
+                : `${outOfPosition.length} שחקנים לא בתפקיד הטבעי שלהם. הסימון האדום במגרש מראה איפה.`}
+            </p>
+          )}
+        </>
+      ) : (
+        (['gk', 'def', 'mid', 'atk'] as const).map(line => (
+          <Line key={line} title={LINE_LABEL[line]} color={LINE_COLOR[line]} players={byLine(line)}
+            render={p => (
+              <PlayerRow p={p} traits={tr(p)} state={picked === p.id ? 'selected' : 'idle'}
+                captain={p.id === captainId}
+                onOpen={() => setCard(p)}
+                swap={picked === p.id ? 'armed' : 'arm'} onSwap={() => armStarter(p)} />
+            )} />
+        ))
+      )}
 
       <div style={{ fontWeight: 800, fontSize: 13.5, color: 'var(--ink-dim)', marginTop: 4 }}>ספסל החילופים</div>
-      <div className="tile" style={{ padding: '4px 10px 8px' }}>
-        {sq.bench.map(p => {
-          const blocked = !!pickedPlayer && !!G.swapBlockedReason(pickedPlayer, p);
-          return (
-            <PlayerRow key={p.id} p={p} traits={tr(p)}
-              state={blocked ? 'blocked' : pickedPlayer ? 'target' : 'idle'}
-              captain={p.id === captainId}
-              onOpen={() => setCard(p)}
-              swap={pickedPlayer ? 'in' : 'off'} onSwap={() => subInBench(p)} />
-          );
-        })}
-      </div>
+      {view === 'pitch' ? (
+        <div className="stack" style={{ gap: 7 }}>
+          {sq.bench.map(p => {
+            const blocked = !!pickedPlayer && sq.starters.some(s => s.id === pickedPlayer.id)
+              && !!G.swapBlockedReason(pickedPlayer, p);
+            return (
+              <button key={p.id} className="bench-pick" data-on={picked === p.id ? '1' : '0'}
+                data-blocked={blocked ? '1' : '0'} onClick={() => tap(p)}
+                aria-pressed={picked === p.id}>
+                <span className="chip" style={{ background: 'rgba(255,255,255,.06)', color: LINE_COLOR[LINE_OF[p.position]], minWidth: 36, justifyContent: 'center' }}>{p.position}</span>
+                <span style={{ flex: 1, minWidth: 0, fontWeight: 700, fontSize: 14.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {p.id === captainId && <span className="lineup-cap">C</span>}{p.name}
+                </span>
+                <span className="num" style={{ fontWeight: 900, fontSize: 17, color: ovrColor(overall(p)) }}>{overall(p)}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="tile" style={{ padding: '4px 10px 8px' }}>
+          {sq.bench.map(p => {
+            const blocked = !!pickedPlayer && !!G.swapBlockedReason(pickedPlayer, p);
+            return (
+              <PlayerRow key={p.id} p={p} traits={tr(p)}
+                state={blocked ? 'blocked' : pickedPlayer ? 'target' : 'idle'}
+                captain={p.id === captainId}
+                onOpen={() => setCard(p)}
+                swap={pickedPlayer ? 'in' : 'off'} onSwap={() => subInBench(p)} />
+            );
+          })}
+        </div>
+      )}
 
       <div className="spacer" />
       <button className="btn" onClick={onDone}>{firstTime ? 'ממשיכים לשוק ההעברות' : 'חזרה'}</button>

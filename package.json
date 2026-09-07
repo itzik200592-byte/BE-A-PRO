@@ -23,7 +23,8 @@
     "check:kits": "node --experimental-strip-types scripts/kit-check.mts",
     "check:palette": "node --experimental-strip-types scripts/palette-check.mts",
     "check:names": "node --experimental-strip-types scripts/names-check.mts",
-    "check:market": "node --experimental-strip-types scripts/market-check.mts"
+    "check:market": "node --experimental-strip-types scripts/market-check.mts",
+    "check:lineup": "node --experimental-strip-types scripts/lineup-check.mts"
   },
   "dependencies": {
     "react": "^18.3.1",
