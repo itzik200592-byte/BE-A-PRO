@@ -8,7 +8,7 @@
  */
 import {
   codeFor, makeThanks, verifyThanks, addClaim, emptyInvite, inviteLink, refFromUrl,
-  GEMS_PER_FRIEND, GEMS_FOR_JOINING, FRIENDS_PER_SEASON, ROUNDS_TO_COUNT,
+  GEMS_PER_FRIEND, GEMS_FOR_JOINING, FRIENDS_PER_SEASON, FRIENDS_LIFETIME, ROUNDS_TO_COUNT,
 } from '../src/game/invite.ts';
 import type { InviteState } from '../src/game/invite.ts';
 
@@ -127,6 +127,44 @@ const alice = codeFor(ALICE), bob = codeFor(BOB), carol = codeFor(CAROL);
   checked += 2;
   if (overCap.ok) fails.push(`the cap of ${FRIENDS_PER_SEASON} did not hold`);
   if (!nextSeason.ok) fails.push('the cap did not reopen next season');
+}
+
+/* 9b. the lifetime cap, which is the one that actually bounds the economy.
+       Without it a manager farming every season out-earns an ordinary one by
+       nine times, and no pack price can be fair to both. */
+{
+  let st: InviteState = emptyInvite();
+  let season = 1, counted = 0;
+  // invite as hard as the rules allow, across many seasons
+  for (let i = 0; i < FRIENDS_LIFETIME + 20; i++) {
+    const v = verifyThanks(makeThanks('lifer' + i, alice, 6), alice, st, season);
+    if (v.ok) { st = addClaim(st, v.friend, season); counted++; }
+    else if (v.why.includes('העונה')) { season++; i--; }   // season cap, roll on
+    else break;                                            // lifetime cap, done
+  }
+  checked += 2;
+  if (counted !== FRIENDS_LIFETIME) fails.push(`a career counted ${counted} friends, the cap is ${FRIENDS_LIFETIME}`);
+  const past = verifyThanks(makeThanks('one-more', alice, 6), alice, st, season + 5);
+  if (past.ok) fails.push('the lifetime cap did not hold, even seasons later');
+  console.log(`  a whole career of inviting tops out at ${counted} friends, ${counted * GEMS_PER_FRIEND} gems`);
+}
+
+/* 9c. the sinks are priced against that ceiling, not against nothing */
+{
+  const { PACKS } = await import('../src/game/packs.ts');
+  const pro = PACKS[PACKS.length - 1];
+  const BASE_PER_SEASON = 3.7;      // measured, see scripts/gem-economy.mts
+  const seasonsForOrdinary = pro.cost / BASE_PER_SEASON;
+  const careerBonus = (FRIENDS_LIFETIME * GEMS_PER_FRIEND) / 8;
+  const seasonsForInviter = pro.cost / (BASE_PER_SEASON + careerBonus);
+  checked += 2;
+  // the best pack has to be a real saving, or gems mean nothing
+  if (seasonsForOrdinary < 3) fails.push(`the best pack is ${seasonsForOrdinary.toFixed(1)} seasons of saving, too cheap`);
+  // and inviting must not turn into a different game
+  if (seasonsForOrdinary / seasonsForInviter > 4) {
+    fails.push(`an inviter gets the best pack ${(seasonsForOrdinary / seasonsForInviter).toFixed(1)}x faster, too far apart`);
+  }
+  console.log(`  the best pack: ${seasonsForOrdinary.toFixed(1)} seasons of saving, ${seasonsForInviter.toFixed(1)} for somebody who invites`);
 }
 
 /* 10. the link carries the ref and the beta door, and reads back */

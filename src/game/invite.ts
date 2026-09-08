@@ -19,8 +19,18 @@
 export const GEMS_PER_FRIEND = 3;
 /** Gems the friend starts with on top of the usual three. */
 export const GEMS_FOR_JOINING = 2;
-/** How many friends can pay out in one season. */
-export const FRIENDS_PER_SEASON = 10;
+/**
+ * How many friends can pay out in one season, and how many ever.
+ *
+ * A per season cap on its own was the wrong shape. It implies a manager finds
+ * ten new friends every season, which nobody does, so the only person it really
+ * served was somebody farming: measured, a maxed inviter was earning nine times
+ * what an ordinary manager earned, which no pack price can be fair to both of.
+ * Inviting people is naturally finite, so the real bound is the lifetime one,
+ * and the season cap only stops a whole career of gems landing in one summer.
+ */
+export const FRIENDS_PER_SEASON = 5;
+export const FRIENDS_LIFETIME = 15;
 /** Rounds the friend must have played before the thank you code exists. */
 export const ROUNDS_TO_COUNT = 5;
 
@@ -141,6 +151,9 @@ export function verifyThanks(
   if (state.claimed.includes(friend)) return { ok: false, why: 'את החבר הזה כבר ספרנו.' };
   if (rounds < ROUNDS_TO_COUNT) {
     return { ok: false, why: `החבר שיחק ${rounds} מחזורים. צריך ${ROUNDS_TO_COUNT} לפני שזה נספר.` };
+  }
+  if (state.claimed.length >= FRIENDS_LIFETIME) {
+    return { ok: false, why: `הגעת ל${FRIENDS_LIFETIME} חברים, המקסימום בקריירה. תודה שהבאת אותם.` };
   }
   if (claimsThisSeason(state, season) >= FRIENDS_PER_SEASON) {
     return { ok: false, why: `הגעת ל${FRIENDS_PER_SEASON} חברים העונה. הדלת נפתחת שוב בעונה הבאה.` };

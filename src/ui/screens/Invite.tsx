@@ -5,7 +5,7 @@ import { Icon } from '../components/Icon.tsx';
 import { TopBack } from '../components/TopBack.tsx';
 import { Gem } from '../components/Gem.tsx';
 import {
-  myCode, inviteLink, GEMS_PER_FRIEND, GEMS_FOR_JOINING, FRIENDS_PER_SEASON, ROUNDS_TO_COUNT,
+  myCode, inviteLink, GEMS_PER_FRIEND, GEMS_FOR_JOINING, FRIENDS_PER_SEASON, FRIENDS_LIFETIME, ROUNDS_TO_COUNT,
 } from '../../game/invite.ts';
 
 /**
@@ -104,7 +104,7 @@ export function InviteScreen({ gs, onRedeem, onBack }: {
 
         {/* the tally */}
         <div className="row" style={{ gap: 8 }}>
-          <Stat label="חברים שנספרו" value={String(counted)} />
+          <Stat label="בקריירה" value={`${counted}/${FRIENDS_LIFETIME}`} />
           <Stat label="העונה" value={`${thisSeason}/${FRIENDS_PER_SEASON}`} />
           <Stat label="יהלומים" value={String(counted * GEMS_PER_FRIEND)} gem />
         </div>
