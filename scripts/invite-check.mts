@@ -157,14 +157,25 @@ const alice = codeFor(ALICE), bob = codeFor(BOB), carol = codeFor(CAROL);
   const seasonsForOrdinary = pro.cost / BASE_PER_SEASON;
   const careerBonus = (FRIENDS_LIFETIME * GEMS_PER_FRIEND) / 8;
   const seasonsForInviter = pro.cost / (BASE_PER_SEASON + careerBonus);
-  checked += 2;
+  checked += 3;
   // the best pack has to be a real saving, or gems mean nothing
   if (seasonsForOrdinary < 3) fails.push(`the best pack is ${seasonsForOrdinary.toFixed(1)} seasons of saving, too cheap`);
   // and inviting must not turn into a different game
   if (seasonsForOrdinary / seasonsForInviter > 4) {
     fails.push(`an inviter gets the best pack ${(seasonsForOrdinary / seasonsForInviter).toFixed(1)}x faster, too far apart`);
   }
+
+  /* The one that matters, and the one that was missing. A ratio can look
+     healthy while the absolute number is not: at three gems a friend and a
+     lifetime of fifteen the ratio read 2.6x and passed, but a whole career of
+     inviting still handed over two and a half of the best pack. What a career
+     of friends buys has to be counted directly. */
+  const packsFromFriends = (FRIENDS_LIFETIME * GEMS_PER_FRIEND) / pro.cost;
+  if (packsFromFriends > 1.5) {
+    fails.push(`a career of invites buys ${packsFromFriends.toFixed(1)} of the best pack, it should be about one`);
+  }
   console.log(`  the best pack: ${seasonsForOrdinary.toFixed(1)} seasons of saving, ${seasonsForInviter.toFixed(1)} for somebody who invites`);
+  console.log(`  a whole career of friends buys ${packsFromFriends.toFixed(2)} of the best pack`);
 }
 
 /* 10. the link carries the ref and the beta door, and reads back */

@@ -16,7 +16,7 @@
  */
 
 /** Gems the inviter gets per friend who really played. */
-export const GEMS_PER_FRIEND = 3;
+export const GEMS_PER_FRIEND = 2;
 /** Gems the friend starts with on top of the usual three. */
 export const GEMS_FOR_JOINING = 2;
 /**
@@ -29,8 +29,8 @@ export const GEMS_FOR_JOINING = 2;
  * Inviting people is naturally finite, so the real bound is the lifetime one,
  * and the season cap only stops a whole career of gems landing in one summer.
  */
-export const FRIENDS_PER_SEASON = 5;
-export const FRIENDS_LIFETIME = 15;
+export const FRIENDS_PER_SEASON = 4;
+export const FRIENDS_LIFETIME = 10;
 /** Rounds the friend must have played before the thank you code exists. */
 export const ROUNDS_TO_COUNT = 5;
 
