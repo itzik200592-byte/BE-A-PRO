@@ -25,7 +25,8 @@
     "check:names": "node --experimental-strip-types scripts/names-check.mts",
     "check:market": "node --experimental-strip-types scripts/market-check.mts",
     "check:lineup": "node --experimental-strip-types scripts/lineup-check.mts",
-    "check:press": "node --experimental-strip-types scripts/press-check.mts"
+    "check:press": "node --experimental-strip-types scripts/press-check.mts",
+    "check:invite": "node --experimental-strip-types scripts/invite-check.mts"
   },
   "dependencies": {
     "react": "^18.3.1",

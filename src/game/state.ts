@@ -27,6 +27,11 @@ import type { FormationId } from '../data/formations.ts';
 import { TEMPLATES, eligible, rollDilemma } from '../data/dilemmas.ts';
 import type { RolledDilemma, DilemmaEffect, Ctx as DilemmaCtx } from '../data/dilemmas.ts';
 import { pickPressQuestion } from '../data/press.ts';
+import {
+  emptyInvite, myCode, deviceId, makeThanks, verifyThanks, addClaim, claimsThisSeason,
+  GEMS_PER_FRIEND, GEMS_FOR_JOINING, ROUNDS_TO_COUNT,
+} from './invite.ts';
+import type { InviteState } from './invite.ts';
 import { pickPressQuestions } from '../data/pressFacts.ts';
 import { matchFacts } from '../data/matchFacts.ts';
 import { pickTrigger, rollChat } from '../data/chats.ts';
@@ -63,7 +68,7 @@ import {
 } from './packs.ts';
 
 export type Phase =
-  | 'onboard-archetype' | 'onboard-manager' | 'onboard-club' | 'signing' | 'squad' | 'hub' | 'transfers'
+  | 'onboard-archetype' | 'onboard-manager' | 'onboard-club' | 'signing' | 'squad' | 'hub' | 'transfers' | 'invite'
   | 'dilemma' | 'tactic' | 'vs' | 'match' | 'result' | 'press' | 'season-end' | 'chronicle'
   | 'captain' | 'assistant' | 'coach' | 'preseason' | 'preseason-market' | 'inbox' | 'chat' | 'table' | 'stadium'
   | 'packs' | 'sacked' | 'sponsor' | 'ultimatum' | 'rescue' | 'youth';
@@ -252,6 +257,10 @@ export interface GameState {
   gems: number;
   /** ads watched for gems this season, capped at ADS_PER_SEASON */
   adsWatched: number;
+  /** friends brought in, and who brought me */
+  invite: InviteState;
+  /** the screen to return to when the invite sheet closes */
+  inviteFrom: Phase | null;
   /** the card just pulled from a pack, waiting to be signed or sold */
   pull: PackPull | null;
   /** the manager's own career: his abilities, his badge, his seasons */
@@ -332,6 +341,8 @@ export function newGame(seed = 12345): GameState {
     preResolved: [],
     gems: GEMS_AT_START,
     adsWatched: 0,
+    invite: emptyInvite(),
+    inviteFrom: null,
     pull: null,
     coach: newCoach('mental'),
   };
@@ -1326,6 +1337,71 @@ export function sellPlayer(gs: GameState, playerId: string): GameState {
 }
 
 export { playerValue, sellPrice, MIN_SQUAD, MAX_SQUAD };
+
+/* ------------------------------------------------------------- friends */
+
+/**
+ * Rounds of football this manager has actually played, across every season of
+ * the career. This is the number a friend has to reach before he is worth
+ * anything to whoever invited him, which is what makes faking an invite cost
+ * more than the gem it pays.
+ */
+export function roundsPlayed(gs: GameState): number {
+  const perSeason = gs.league?.rounds ?? 14;
+  return Math.max(0, (gs.season - 1) * perSeason + gs.week - 1);
+}
+
+/** The code this manager sends back to whoever invited him, once he has played. */
+export function thanksCode(gs: GameState): string | null {
+  const inviter = gs.invite?.invitedBy;
+  if (!inviter) return null;
+  const played = roundsPlayed(gs);
+  if (played < ROUNDS_TO_COUNT) return null;
+  return makeThanks(deviceId(), inviter, played);
+}
+
+/** How many more rounds before the thank you code exists. */
+export function roundsUntilThanks(gs: GameState): number {
+  return Math.max(0, ROUNDS_TO_COUNT - roundsPlayed(gs));
+}
+
+/** Remember who brought this manager in, and hand him his welcome gems. */
+export function acceptInvite(gs: GameState, ref: string): GameState {
+  // only once, and never your own code
+  if (gs.invite?.invitedBy || ref === myCode()) return gs;
+  return {
+    ...gs,
+    gems: gs.gems + GEMS_FOR_JOINING,
+    invite: { ...(gs.invite ?? emptyInvite()), invitedBy: ref },
+  };
+}
+
+export interface RedeemResult { gs: GameState; ok: boolean; message: string; }
+
+/** Read a friend's thank you code and pay for him if it holds up. */
+export function redeemThanks(gs: GameState, text: string): RedeemResult {
+  const state = gs.invite ?? emptyInvite();
+  const v = verifyThanks(text, myCode(), state, gs.season);
+  if (!v.ok) return { gs, ok: false, message: v.why };
+  return {
+    gs: { ...gs, gems: gs.gems + GEMS_PER_FRIEND, invite: addClaim(state, v.friend, gs.season) },
+    ok: true,
+    message: `נספר. ${GEMS_PER_FRIEND} יהלומים נכנסו לחשבון.`,
+  };
+}
+
+/** Friends counted this season, and how many the cap still allows. */
+/** Open and close the invite screen, remembering where the manager was. */
+export function openInvite(gs: GameState): GameState {
+  return gs.phase === 'invite' ? gs : { ...gs, inviteFrom: gs.phase, phase: 'invite' };
+}
+export function closeInvite(gs: GameState): GameState {
+  return { ...gs, phase: gs.inviteFrom ?? 'hub', inviteFrom: null };
+}
+
+export function friendsThisSeason(gs: GameState): number {
+  return claimsThisSeason(gs.invite ?? emptyInvite(), gs.season);
+}
 
 /* -------------------------------------------------------- gems and packs */
 

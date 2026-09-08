@@ -34,6 +34,9 @@ import { AssistantScreen } from './screens/Assistant.tsx';
 import { StadiumScreen } from './screens/Stadium.tsx';
 import { PacksScreen } from './screens/Packs.tsx';
 import { CoachScreen } from './screens/Coach.tsx';
+import { InviteScreen } from './screens/Invite.tsx';
+import { setInviteHandler } from './components/bits.tsx';
+import { refFromUrl } from '../game/invite.ts';
 
 export function App() {
   const [entered, setEntered] = useState(() => hasEntry());  // soft code gate for closed testing
@@ -44,6 +47,31 @@ export function App() {
   const [saved, setSaved] = useState<SaveSummary | null>(() => savedSummary());
   const [tutorial, setTutorial] = useState(false);
   const [fromPreseason, setFromPreseason] = useState(false);   // market opened from the summer board
+  // who sent this link, kept for the moment a career actually starts. Read once
+  // on load, because the url is tidied straight afterwards
+  const [ref] = useState<string | null>(() => {
+    try { return refFromUrl(location.search); } catch { return null; }
+  });
+
+  // one handler for the share button that sits in the meters bar on every
+  // screen. The functional update keeps it from closing over a stale state
+  useEffect(() => {
+    if (!booted) { setInviteHandler(null); return; }
+    setInviteHandler(() => setGs(prev => G.openInvite(prev)));
+    return () => setInviteHandler(null);
+  }, [booted]);
+
+  // an invite link carries the beta door code, so a friend walks straight in
+  useEffect(() => {
+    try {
+      if (ref && /[?&]k=100(&|$)/.test(location.search)) {
+        localStorage.setItem('beapro.gate', '1');
+        setEntered(true);
+      }
+      // tidy the address bar so a refresh does not look like a second invite
+      if (location.search) history.replaceState(null, '', location.pathname);
+    } catch { /* private mode, the link still worked */ }
+  }, [ref]);
 
   // persist the career whenever it changes, so closing the tab is not a loss
   useEffect(() => { if (booted) saveCareer(gs); }, [gs, booted]);
@@ -61,7 +89,8 @@ export function App() {
   function startNew() {
     clearCareer();
     setSaved(null);
-    setGs(G.newGame(Math.floor(Math.random() * 100000) + 1));
+    const fresh = G.newGame(Math.floor(Math.random() * 100000) + 1);
+    setGs(ref ? G.acceptInvite(fresh, ref) : fresh);
     setBooted(true);
   }
 
@@ -214,6 +243,15 @@ export function App() {
       {gs.phase === 'result' && <ResultScreen gs={gs} onContinue={() => setGs(G.continueFromResult(gs))} />}
       {gs.phase === 'press' && <PressScreen key={gs.press?.q.text} gs={gs} onAnswer={i => setGs(G.answerPress(gs, i))} />}
       {gs.phase === 'chat' && <ChatScreen gs={gs} onDone={() => setGs(G.closeChat(gs))} />}
+      {gs.phase === 'invite' && (
+        <InviteScreen gs={gs}
+          onRedeem={code => {
+            const r = G.redeemThanks(gs, code);
+            if (r.ok) setGs(r.gs);
+            return { ok: r.ok, message: r.message };
+          }}
+          onBack={() => setGs(G.closeInvite(gs))} />
+      )}
       {gs.phase === 'table' && <StandingsScreen gs={gs} onBack={() => setGs(G.closeTable(gs))} />}
       {gs.phase === 'season-end' && <SeasonEnd gs={gs} onContinue={() => setGs(G.startNextSeason(gs))} />}
       {gs.phase === 'ultimatum' && <UltimatumScreen gs={gs} onGo={() => setGs(G.advancePastPress(gs))} />}

@@ -8,6 +8,14 @@ export function Badge({ club, size = 44 }: { club: Club; size?: number }) {
   return <Crest club={club} size={size} />;
 }
 
+/**
+ * Bringing a friend is reachable from every screen, so the button lives in the
+ * bar that is always there. Fourteen screens render Meters, so rather than
+ * drill a prop through all of them the App registers one handler here.
+ */
+let inviteHandler: (() => void) | null = null;
+export function setInviteHandler(fn: (() => void) | null): void { inviteHandler = fn; }
+
 export function Meters({ money, morale, prestige, gems }: {
   money: number; morale: number; prestige: number;
   /** premium currency, shown as a compact pill when provided */
@@ -22,6 +30,14 @@ export function Meters({ money, morale, prestige, gems }: {
         color={morale >= 55 ? 'var(--win)' : morale >= 35 ? 'var(--gold)' : 'var(--loss)'}
       />
       {gems !== undefined && <GemPill n={gems} />}
+      {/* the same condition as the gems: a career is running. Keying it off the
+          handler instead would not work, because a module variable changing
+          does not tell React to draw the bar again. */}
+      {gems !== undefined && (
+        <button className="meters-share" onClick={() => inviteHandler?.()} aria-label="תביא חבר, קבל יהלומים" title="תביא חבר">
+          <Icon name="crowd" size={17} />
+        </button>
+      )}
     </div>
   );
 }

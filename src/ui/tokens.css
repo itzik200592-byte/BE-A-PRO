@@ -915,3 +915,12 @@ input{font-family:inherit;}
 }
 .bench-pick[data-on="1"]{border-color:var(--gold); background:rgba(233,185,73,.12);}
 .bench-pick[data-blocked="1"]{opacity:.45;}
+
+/* bring a friend, always reachable from the bar that is always there */
+.meters-share{
+  flex:none; width:34px; height:34px; border-radius:11px;
+  display:grid; place-items:center;
+  background:rgba(233,185,73,.14); color:var(--gold-hi);
+  border:1px solid color-mix(in srgb, var(--gold) 34%, transparent);
+}
+.meters-share:active{transform:scale(.94);}
