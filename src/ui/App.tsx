@@ -124,7 +124,10 @@ export function App() {
   if (!booted) {
     return (
       <div className="frame">
-        <TitleScreen saved={saved} onNew={startNew} onContinue={continueCareer} />
+        <>
+          <TitleScreen saved={saved} onNew={startNew} onContinue={continueCareer} onInstall={() => setInstallOpen(true)} />
+          {installOpen && <InstallSheet onClose={() => setInstallOpen(false)} />}
+        </>
       </div>
     );
   }

@@ -1,17 +1,27 @@
 import type { SaveSummary } from '../../game/save.ts';
 import { asset } from '../asset.ts';
 import { Icon } from '../components/Icon.tsx';
+import { useEffect, useState } from 'react';
+import { watchInstall, isInstalled } from '../install.ts';
 import type { IconName } from '../components/Icon.tsx';
 
 /**
  * Entry screen. The job of these three seconds is to say what this game is:
  * an Israeli club, at night, under floodlights, and you are the manager.
  */
-export function TitleScreen({ saved, onNew, onContinue }: {
+export function TitleScreen({ saved, onNew, onContinue, onInstall }: {
   saved: SaveSummary | null;
   onNew: () => void;
   onContinue: () => void;
+  /** open the "put it on your home screen" sheet */
+  onInstall: () => void;
 }) {
+  // Chrome decides a site is installable a moment after load, so this screen
+  // has to be told when that happens rather than reading it once
+  const [, bump] = useState(0);
+  useEffect(() => watchInstall(() => bump(n => n + 1)), []);
+  const installed = isInstalled();
+
   return (
     <div className="screen" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', position: 'relative' }}>
       <Stadium />
@@ -76,6 +86,26 @@ export function TitleScreen({ saved, onNew, onContinue }: {
           </button>
 
           {saved && <p className="hint" style={{ textAlign: 'center' }}>קריירה חדשה תמחק את הקריירה השמורה.</p>}
+
+          {/* The install belongs HERE, before a career, not buried in the game.
+              Somebody who has just arrived should be able to put the game on his
+              phone and open it from there, rather than discovering the option
+              three screens into a career he started in a browser tab. Shown
+              whatever the device says: the sheet knows the right route for each
+              one, including the browsers that have none, so this is never a
+              button that does nothing. */}
+          {!installed && (
+            <button className="title-install" onClick={onInstall}>
+              <Icon name="download" size={17} color="var(--gold)" />
+              <span style={{ flex: 1, textAlign: 'start' }}>
+                <span style={{ display: 'block', fontSize: 14.5, fontWeight: 800 }}>שים את המשחק על מסך הבית</span>
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--ink-faint)', fontWeight: 600, marginTop: 1 }}>
+                  נפתח כמו אפליקציה, בלי שורת כתובת
+                </span>
+              </span>
+              <Icon name="chevron" size={15} color="var(--ink-faint)" />
+            </button>
+          )}
 
           <div className="row" style={{ gap: 8, marginTop: 4 }}>
             <Feature icon="clipboard" text="טקטיקה" />

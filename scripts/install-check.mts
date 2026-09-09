@@ -118,6 +118,32 @@ const DESKTOP = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Ch
   if (!m.name || !m.short_name) fails.push('the manifest has no name to put under the icon');
 }
 
+/* 8. the offer is reachable BEFORE a career, which is the whole point.
+      It first shipped only inside the meters bar, and that bar is drawn only on
+      career screens, so a new arrival could not find it at all: he started in a
+      browser tab and only met the option three screens in. The title screen is
+      the landing page this game already has, so that is where it belongs. */
+{
+  const fs = await import('node:fs');
+  const title = fs.readFileSync('src/ui/screens/Title.tsx', 'utf8');
+  const app = fs.readFileSync('src/ui/App.tsx', 'utf8');
+  checked += 4;
+  if (!title.includes('title-install')) {
+    fails.push('the title screen does not offer the install, so a new player cannot find it');
+  }
+  if (!title.includes('watchInstall')) {
+    fails.push('the title screen never hears about the install event, so the offer can go stale');
+  }
+  if (!title.includes('isInstalled()')) {
+    fails.push('the title screen would offer to install a game that already is');
+  }
+  // and the sheet has to actually render there, which is before the career boots
+  const beforeBoot = app.slice(0, app.indexOf("gs.phase === 'invite'"));
+  if (!/TitleScreen[\s\S]{0,400}InstallSheet/.test(beforeBoot)) {
+    fails.push('the sheet is not rendered alongside the title screen, so the button would do nothing there');
+  }
+}
+
 console.log(`${checked} checks across iPhone, iPad, Android and desktop`);
 if (fails.length) console.log('\n  ' + fails.slice(0, 8).join('\n  '));
 console.log(fails.length ? '\nFAIL' : '\nOK, every device is offered only what it can actually do');

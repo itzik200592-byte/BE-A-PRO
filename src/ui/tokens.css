@@ -933,3 +933,14 @@ input{font-family:inherit;}
   border:1px solid var(--line-2);
 }
 .meters-install:active{transform:scale(.94);}
+
+/* the install offer on the title screen, where somebody who has just arrived
+   can act on it before starting a career in a browser tab */
+.title-install{
+  display:flex; align-items:center; gap:11px; width:100%;
+  padding:12px 14px; border-radius:var(--plate-sm);
+  background:rgba(233,185,73,.07);
+  border:1px solid color-mix(in srgb, var(--gold) 28%, transparent);
+  color:var(--ink);
+}
+.title-install:active{transform:scale(.99);}
