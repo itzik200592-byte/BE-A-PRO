@@ -69,6 +69,7 @@ function playMatch(seed: number, t: Tally, myLvl = 58, oppLvl = 58) {
         case 'shot': L.resolveShot(st, pick(CORNERS)); break;
         case 'free_kick': L.resolveFreeKick(st, pick(CORNERS)); break;
         case 'one_on_one': L.resolveOneOnOne(st, pick(['dribble', 'finish'])); break;
+        case 'def_penalty': L.resolveDefPenalty(st, pick(CORNERS)); break;
         case 'def_keeper': L.resolveDefKeeper(st, pick(['rush', 'stay'])); break;
         case 'def_tackle': L.resolveDefTackle(st, pick(['slide', 'contain'])); break;
         case 'tactic': L.resolveTactic(st, m.options?.[0]?.id ?? ''); break;

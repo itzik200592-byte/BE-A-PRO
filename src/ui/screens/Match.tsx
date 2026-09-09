@@ -30,6 +30,20 @@ function penOutcomeImg(corner: Corner, scored: boolean): string {
   return asset(`/moments/penalty/${scored ? 'goal' : 'save'}-${corner}.webp`);
 }
 
+/**
+ * A penalty against us. The reverse angle: you are behind your own keeper, and
+ * the corner you pick is where you send HIM.
+ *
+ * There is one frame here rather than six. Six meant drawing a diving save from
+ * inside the goal at three different corners, twice over, and every attempt came
+ * back with the geometry broken: the keeper above his own crossbar, or bigger
+ * than the goal, or five metres off his line. Rather than ship six pictures that
+ * are subtly wrong, the moment holds on the one that is right and the OUTCOME is
+ * carried by colour and by the headline over it. The corner is not information
+ * the player is missing: he chose it himself two seconds ago.
+ */
+const DEF_PEN_BUILDUP = asset('/moments/def-penalty/buildup.webp');
+
 /** Same shape for free kicks, with a third outcome, hitting the wall. */
 const FK_BUILDUP = asset('/moments/free-kick/buildup.webp');
 function fkOutcomeImg(corner: Corner, outcome: L.FreeKickOutcome): string {
@@ -75,13 +89,13 @@ function tacticImg(tier: number): string {
 /** What every moment opens on, so these are the ones that must be there first. */
 const BUILDUP_IMAGES = [
   PEN_BUILDUP, FK_BUILDUP, SHOT_BUILDUP, ONE_ON_ONE_BUILDUP,
-  DEF_KEEPER_BUILDUP, DEF_TACKLE_BUILDUP,
+  DEF_KEEPER_BUILDUP, DEF_TACKLE_BUILDUP, DEF_PEN_BUILDUP,
   ...['tier1', 'tier2', 'tier3'].map(s => asset(`/moments/tactic/${s}.webp`)),
 ];
 
 /** Warm the moment images so the first popup does not flash-load. */
 const MOMENT_IMAGES = [
-  PEN_BUILDUP, FK_BUILDUP, SHOT_BUILDUP, ONE_ON_ONE_BUILDUP, DEF_KEEPER_BUILDUP, DEF_TACKLE_BUILDUP, asset('/moments/tactic.webp'),
+  PEN_BUILDUP, FK_BUILDUP, SHOT_BUILDUP, ONE_ON_ONE_BUILDUP, DEF_KEEPER_BUILDUP, DEF_TACKLE_BUILDUP, DEF_PEN_BUILDUP, asset('/moments/tactic.webp'),
   ...['goal-left', 'goal-center', 'goal-right', 'save-left', 'save-center', 'save-right'].map(s => asset(`/moments/penalty/${s}.webp`)),
   ...['goal-left', 'goal-center', 'goal-right', 'save-left', 'save-center', 'save-right', 'wall'].map(s => asset(`/moments/free-kick/${s}.webp`)),
   ...['goal-left', 'goal-center', 'goal-right', 'save-left', 'save-center', 'save-right', 'wide-left', 'wide-right'].map(s => asset(`/moments/shot/${s}.webp`)),
@@ -129,6 +143,7 @@ export function MatchBroadcast({ gs, onDone }: { gs: G.GameState; onDone: (r: Ma
   const [subOpen, setSubOpen] = useState(false);   // the substitution sheet
   const [subFocus, setSubFocus] = useState<string | null>(null);   // a player tapped for a quick swap
   const [penOutcome, setPenOutcome] = useState<{ corner: Corner; scored: boolean } | null>(null);
+  const [defPenOutcome, setDefPenOutcome] = useState<{ saved: boolean; keeper: string } | null>(null);
   const [fkOutcome, setFkOutcome] = useState<{ corner: Corner; outcome: L.FreeKickOutcome } | null>(null);
   const [shotOutcome, setShotOutcome] = useState<{ corner: Corner; outcome: L.ShotOutcome } | null>(null);
   const [oneOnOneOutcome, setOneOnOneOutcome] = useState<L.OneOnOneOutcome | null>(null);
@@ -293,6 +308,13 @@ export function MatchBroadcast({ gs, onDone }: { gs: G.GameState; onDone: (r: Ma
       {/* decisions, each pops up as a full-screen moment (portaled) */}
       {pending?.kind === 'penalty' && <MomentPopup m={pending} kind="penalty" onPickCorner={c => { const scored = L.resolvePenalty(st, c); setPenOutcome({ corner: c, scored }); force(); }} />}
       {penOutcome && <PenaltyOutcome corner={penOutcome.corner} scored={penOutcome.scored} onDone={() => setPenOutcome(null)} />}
+      {pending?.kind === 'def_penalty' && <MomentPopup m={pending} kind="def_penalty" onPickCorner={c => {
+        const keeper = L.playerKeeperName(st);
+        const { saved } = L.resolveDefPenalty(st, c);
+        setDefPenOutcome({ saved, keeper });
+        force();
+      }} />}
+      {defPenOutcome && <DefPenaltyOutcome saved={defPenOutcome.saved} keeper={defPenOutcome.keeper} onDone={() => setDefPenOutcome(null)} />}
       {pending?.kind === 'shot' && <MomentPopup m={pending} kind="shot" onPickCorner={c => { const outcome = L.resolveShot(st, c); setShotOutcome({ corner: c, outcome }); force(); }} />}
       {shotOutcome && <ShotOutcomeCard corner={shotOutcome.corner} outcome={shotOutcome.outcome} onDone={() => setShotOutcome(null)} />}
       {pending?.kind === 'free_kick' && <MomentPopup m={pending} kind="free_kick" onPickCorner={c => { const outcome = L.resolveFreeKick(st, c); setFkOutcome({ corner: c, outcome }); force(); }} />}
@@ -748,10 +770,11 @@ function FeedRow({ ev, mine, fresh, dim }: { ev: L.LiveEvent; mine: boolean; fre
  * stays in the moment.
  */
 
-type MomentKind = 'penalty' | 'shot' | 'one_on_one' | 'tactic' | 'free_kick' | 'def_keeper' | 'def_tackle';
+type MomentKind = 'penalty' | 'shot' | 'one_on_one' | 'tactic' | 'free_kick' | 'def_keeper' | 'def_tackle' | 'def_penalty';
 
 const MOMENT_LOOK: Record<MomentKind, { img: string; accent: string; kicker: string }> = {
   penalty:    { img: PEN_BUILDUP,                accent: 'var(--blood)', kicker: 'פנדל' },
+  def_penalty:{ img: DEF_PEN_BUILDUP,            accent: 'var(--loss)',  kicker: 'פנדל נגדנו' },
   shot:       { img: SHOT_BUILDUP,               accent: 'var(--gold)',  kicker: 'הזדמנות' },
   one_on_one: { img: ONE_ON_ONE_BUILDUP,         accent: 'var(--win)',   kicker: 'אחד על אחד' },
   tactic:     { img: asset('/moments/tactic.webp'),     accent: 'var(--gold)',  kicker: 'בקווים' },
@@ -781,6 +804,43 @@ function PenaltyOutcome({ corner, scored, onDone }: { corner: Corner; scored: bo
             </div>
             <div className="sub" style={{ marginTop: 6 }}>
               {scored ? 'הכדור ברשת, היציע מתפוצץ' : 'השוער קרא את זה, הזדמנות שנשרפה'}
+            </div>
+            <button className="btn" style={{ marginTop: 16 }} onClick={onDone}>המשך <Icon name="chevron" size={17} /></button>
+          </div>
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
+/**
+ * The payoff on a penalty against us. The mirror of the one above, and the only
+ * moment in the game where the good outcome is nothing happening: the keeper
+ * guessed with you and the scoreboard did not move.
+ */
+function DefPenaltyOutcome({ saved, keeper, onDone }: {
+  saved: boolean; keeper: string; onDone: () => void;
+}) {
+  const accent = saved ? 'var(--win)' : 'var(--loss)';
+  return (
+    <Portal>
+      <div className="moment-scrim" onClick={onDone}>
+        <div className="moment" style={{ borderColor: `${accent}55` }} onClick={e => e.stopPropagation()}>
+          <div className="moment-hero" style={{ backgroundImage: `url('${DEF_PEN_BUILDUP}')`, aspectRatio: '9 / 12', backgroundPosition: 'center 34%' }} aria-hidden="true">
+            {/* the outcome is the colour: the same goal mouth washed green when he
+                keeps it out and red when it goes in, so the frame reads before a
+                word of it is read */}
+            <div className="moment-wash" style={{ background: saved
+              ? 'linear-gradient(180deg, rgba(46,160,90,.10) 0%, rgba(46,160,90,.42) 100%)'
+              : 'linear-gradient(180deg, rgba(226,72,77,.12) 0%, rgba(226,72,77,.50) 100%)' }} />
+            <div className="moment-hero-fade" />
+          </div>
+          <div className="moment-body" style={{ textAlign: 'center' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: saved ? 40 : 30, color: accent, lineHeight: 1 }}>
+              {saved ? 'עצר!' : 'ספגנו.'}
+            </div>
+            <div className="sub" style={{ marginTop: 6 }}>
+              {saved ? `${keeper} הלך לפינה הנכונה. איזו הצלה` : 'הכדור ברשת שלנו, אין מה לעשות מ-11 מטר'}
             </div>
             <button className="btn" style={{ marginTop: 16 }} onClick={onDone}>המשך <Icon name="chevron" size={17} /></button>
           </div>
@@ -942,9 +1002,19 @@ function MomentPopup({ m, kind, onPickCorner, onPickOption, imgOverride }: {
 }) {
   const look = MOMENT_LOOK[kind];
   const img = imgOverride ?? look.img;
-  const tend = m.keeperDir === 'left' ? 'נוטה לצלול שמאלה'
-    : m.keeperDir === 'right' ? 'נוטה לצלול ימינה'
-    : 'בדרך כלל נשאר במרכז';
+  // at our own end the hidden corner belongs to the TAKER, not to a keeper, so
+  // the scouting line has to say whose tendency it is or it reads backwards
+  const against = kind === 'def_penalty';
+  const tend = against
+    ? (m.keeperDir === 'left' ? 'נוטה לבעוט שמאלה'
+      : m.keeperDir === 'right' ? 'נוטה לבעוט ימינה'
+      : 'בדרך כלל בועט למרכז')
+    : (m.keeperDir === 'left' ? 'נוטה לצלול שמאלה'
+      : m.keeperDir === 'right' ? 'נוטה לצלול ימינה'
+      : 'בדרך כלל נשאר במרכז');
+  const intel = against
+    ? `${m.subtitle}. המודיעין: ${m.shooterName} ${tend}.`
+    : `${m.subtitle}. המודיעין: השוער ${tend}.`;
 
   return (
     <Portal>
@@ -964,12 +1034,17 @@ function MomentPopup({ m, kind, onPickCorner, onPickOption, imgOverride }: {
             {m.title}
           </div>
           <div className="sub" style={{ textAlign: 'center', marginTop: 6 }}>
-            {onPickCorner ? `${m.subtitle}. המודיעין: השוער ${tend}.` : m.subtitle}
+            {onPickCorner ? intel : m.subtitle}
           </div>
 
           {onPickCorner && (
+            <div className="label-cap" style={{ textAlign: 'center', marginTop: 14 }}>
+              {against ? 'לאן שולחים את השוער?' : 'לאן בועטים?'}
+            </div>
+          )}
+          {onPickCorner && (
             /* ltr on purpose: 'שמאל' must sit on screen left, matching the keeper hint above */
-            <div className="row" style={{ gap: 8, marginTop: 16, direction: 'ltr' }}>
+            <div className="row" style={{ gap: 8, marginTop: 8, direction: 'ltr' }}>
               {CORNERS.map(c => (
                 <button key={c.id} className="btn btn-sm" style={{ flex: 1 }} onClick={() => onPickCorner(c.id)}>{c.label}</button>
               ))}

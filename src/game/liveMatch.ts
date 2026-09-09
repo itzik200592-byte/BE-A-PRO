@@ -53,7 +53,7 @@ export interface Side {
 
 export type MomentKind =
   | 'penalty' | 'shot' | 'one_on_one' | 'tactic' | 'free_kick'
-  | 'def_keeper' | 'def_tackle';   // defending is a decision too
+  | 'def_keeper' | 'def_tackle' | 'def_penalty';   // defending is a decision too
 
 export interface MomentOption { id: string; label: string; hint?: string; }
 
@@ -150,6 +150,11 @@ function pickShooter(s: Side, st: LiveState): Player {
   let r = rand(st) * total;
   for (let i = 0; i < outfield.length; i++) { r -= weights[i]; if (r <= 0) return outfield[i]; }
   return outfield[outfield.length - 1];
+}
+
+/** Our keeper's name, for a screen that needs it before he is asked to dive. */
+export function playerKeeperName(st: LiveState): string {
+  return playerSide(st).onPitch.find(p => p.position === 'GK')?.name ?? 'השוער';
 }
 
 function keeperOvr(s: Side): number {
@@ -292,6 +297,21 @@ const ATT_MOMENT = 0.13;    // your attack becomes a decision above this
 const DEF_MOMENT = 0.13;    // their attack becomes a decision above this
 
 /**
+ * Penalties, per match, at each end.
+ *
+ * One penalty roughly every three matches, which is about what real football
+ * gives you (0.27 a game across both sides) and rare enough that the whistle
+ * still makes the room go quiet. Split so it goes your way a little more often
+ * than against you, because a manager should feel his own attack earning them.
+ *
+ * These are rolled on their own, BEFORE the chance gate at either end, so the
+ * rate is a rate and not a by-product of how much football is being played.
+ * Measured over simulated seasons rather than trusted to this arithmetic.
+ */
+const PEN_FOR = 0.222;
+const PEN_AGAINST = 0.128;
+
+/**
  * What the chance was worth, as a multiplier on whatever the decision pays out.
  * Calibrated so a chance at the old handover line (about 0.36) is worth roughly
  * what it always was, and everything scruffier than that is worth less.
@@ -328,6 +348,24 @@ function pickDefender(s: Side): Player {
 function oppChance(st: LiveState, possNorm: number) {
   const atk = oppSide(st), def = playerSide(st);
   const ra = sideRatings(atk), rd = sideRatings(def);
+
+  // A penalty against you is not a chance that has to fight its way through the
+  // gate below: it is awarded, and from that second the only thing left in the
+  // world is which way you send your keeper. Rolled first and on its own.
+  if (rand(st) < PEN_AGAINST / 90) {
+    const taker = pickShooter(atk, st);
+    const gk = def.onPitch.find(p => p.position === 'GK');
+    st.phase = 'moment';
+    st.pending = {
+      kind: 'def_penalty', minute: st.minute, shooterId: taker.id, shooterName: taker.name,
+      // the hidden corner, which at this end is where the TAKER is going
+      keeperDir: keeperDir(st),
+      title: 'פנדל נגדנו!',
+      subtitle: `${taker.name} מניח את הכדור מול ${gk?.name ?? 'השוער שלך'}`,
+    };
+    return;
+  }
+
   const lambda = 4.9 * Math.pow(ra.att / rd.def, 1.9) * (0.7 + 0.6 * possNorm);
   if (rand(st) >= lambda / 90) return;
 
@@ -388,7 +426,7 @@ function playerChance(st: LiveState) {
   const lambda = 4.9 * Math.pow(ra.att / rd.def, 1.9) * (0.7 + 0.6 * possNorm);
 
   // penalty, rare
-  if (rand(st) < 0.14 / 90) {
+  if (rand(st) < PEN_FOR / 90) {
     const taker = pickShooter(atk, st);
     st.phase = 'moment';
     st.pending = { kind: 'penalty', minute: st.minute, shooterId: taker.id, shooterName: taker.name, keeperDir: keeperDir(st), title: 'פנדל!', subtitle: `${taker.name} על הכדור` };
@@ -603,6 +641,47 @@ function concede(st: LiveState, scorerName: string, text: string) {
 }
 
 /* ------------------------------------------------------------ defending */
+
+/**
+ * A penalty against you. You do not kick it, you only choose where your keeper
+ * goes, which is the whole of the job from the touchline: one guess, no way to
+ * take it back, and a crowd watching you make it.
+ *
+ * Guessing right is most of a save but not all of it — a good keeper gets a
+ * hand to one he read wrong, and a poor one lets in some he read right. Over a
+ * random aim that lands around a fifth saved, which is what penalties are.
+ *
+ * Returns whether it was kept out, and the corner the ball actually went to, so
+ * the screen can show where it ended up rather than where you sent the keeper.
+ */
+export interface DefPenaltyOutcome { saved: boolean; aim: Corner; }
+export function resolveDefPenalty(st: LiveState, dive: Corner): DefPenaltyOutcome {
+  const m = st.pending!;
+  const aim = actualDive(st, m.keeperDir!);
+  const gk = playerSide(st).onPitch.find(p => p.position === 'GK');
+  const gkq = gk ? overall(gk) : 55;
+  const right = dive === aim;
+  const saved = rand(st) < (right
+    ? 0.55 + (gkq - 60) / 250
+    : 0.06 + (gkq - 60) / 500);
+
+  const idx = st.iAmHome ? 1 : 0;   // it is their shot and their expected goal
+  st.shots[idx]++; st.xg[idx] += 0.76;
+
+  if (saved) {
+    st.events.push({
+      minute: st.minute, type: 'penalty_miss', teamId: oppSide(st).id, playerName: m.shooterName,
+      text: right
+        ? `${gk?.name ?? 'השוער'} הלך לפינה הנכונה ועצר פנדל!`
+        : `${gk?.name ?? 'השוער'} הלך לצד השני והספיק להחזיר יד. איזו הצלה!`,
+      big: true,
+    });
+  } else {
+    concede(st, m.shooterName!, `פנדל. ${m.shooterName} כובש מ-11 מטר`);
+  }
+  clearMoment(st);
+  return { saved, aim };
+}
 
 export type DefKeeperOutcome = 'rush-save' | 'rush-goal' | 'stay-save' | 'stay-goal';
 export function resolveDefKeeper(st: LiveState, optionId: string): DefKeeperOutcome {

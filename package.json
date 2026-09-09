@@ -33,7 +33,8 @@
     "check:scroll": "node --experimental-strip-types scripts/scroll-check.mts",
     "check:summer": "node --experimental-strip-types scripts/summer-check.mts",
     "check:legends": "node --experimental-strip-types scripts/legends-check.mts",
-    "check:seasonkit": "node --experimental-strip-types scripts/season-kit-check.mts"
+    "check:seasonkit": "node --experimental-strip-types scripts/season-kit-check.mts",
+    "check:penalty": "node --experimental-strip-types scripts/penalty-check.mts"
   },
   "dependencies": {
     "react": "^18.3.1",

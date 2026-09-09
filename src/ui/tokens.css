@@ -1123,3 +1123,7 @@ input{font-family:inherit;}
 .kit-reveal{gap:clamp(8px, 1.7vh, 14px); padding-bottom:clamp(14px, 3vh, 32px);}
 .kit-stage{gap:clamp(9px, 1.7vh, 14px); padding-bottom:clamp(10px, 2vh, 16px);}
 .kit-reveal .hint{margin:0;}
+
+/* the outcome wash over a moment frame, when the result is carried by colour
+   rather than by a second photograph */
+.moment-wash{position:absolute; inset:0; pointer-events:none;}
