@@ -14,6 +14,7 @@ import { Stepper } from '../components/Stepper.tsx';
 import { CoachGuide } from '../components/CoachGuide.tsx';
 import { PlayerCard } from '../components/PlayerCard.tsx';
 import { LineupPitch } from '../components/LineupPitch.tsx';
+import { scrollToTop } from '../scroll.ts';
 import { formation, fillFormation, roleFit, ROLE_LABEL } from '../../data/formations.ts';
 
 export const LINE_OF: Record<Position, 'gk' | 'def' | 'mid' | 'atk'> = {
@@ -246,8 +247,8 @@ export function SquadScreen({ gs, firstTime, onSwap, onDone }: {
       </div>
 
       <div className="seg" role="tablist">
-        <button role="tab" aria-selected={view === 'pitch'} data-on={view === 'pitch' ? '1' : '0'} onClick={() => setView('pitch')}>המגרש</button>
-        <button role="tab" aria-selected={view === 'list'} data-on={view === 'list' ? '1' : '0'} onClick={() => setView('list')}>רשימה</button>
+        <button role="tab" aria-selected={view === 'pitch'} data-on={view === 'pitch' ? '1' : '0'} onClick={() => { setView('pitch'); scrollToTop(); }}>המגרש</button>
+        <button role="tab" aria-selected={view === 'list'} data-on={view === 'list' ? '1' : '0'} onClick={() => { setView('list'); scrollToTop(); }}>רשימה</button>
       </div>
 
       {view === 'pitch' ? (

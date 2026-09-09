@@ -1,4 +1,5 @@
 import { TopBack } from '../components/TopBack.tsx';
+import { scrollToTop } from '../scroll.ts';
 import { useState } from 'react';
 import * as G from '../../game/state.ts';
 import { sortedTable } from '../../game/league.ts';
@@ -39,7 +40,7 @@ export function StandingsScreen({ gs, onBack }: { gs: G.GameState; onBack: () =>
 
       <div className="seg">
         {TABS.map(t => (
-          <button key={t.id} data-on={tab === t.id ? '1' : '0'} onClick={() => setTab(t.id)}>
+          <button key={t.id} data-on={tab === t.id ? '1' : '0'} onClick={() => { setTab(t.id); scrollToTop(); }}>
             {t.label}
           </button>
         ))}

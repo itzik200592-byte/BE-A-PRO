@@ -38,6 +38,7 @@ import { InviteScreen } from './screens/Invite.tsx';
 import { setInviteHandler, setInstallHandler } from './components/bits.tsx';
 import { InstallSheet } from './components/InstallSheet.tsx';
 import { refFromUrl } from '../game/invite.ts';
+import { scrollToTop } from './scroll.ts';
 
 export function App() {
   const [entered, setEntered] = useState(() => hasEntry());  // soft code gate for closed testing
@@ -81,15 +82,12 @@ export function App() {
   // persist the career whenever it changes, so closing the tab is not a loss
   useEffect(() => { if (booted) saveCareer(gs); }, [gs, booted]);
 
-  // Every screen change starts at the top. Without this the next page opens at
-  // the previous page's scroll position, which makes the game look frozen.
-  const screenKey = !entered ? 'gate' : !introDone ? 'intro' : !booted ? 'title' : gs.phase;
-  useLayoutEffect(() => {
-    const targets = [document.scrollingElement, document.documentElement, document.body,
-      document.getElementById('root'), document.querySelector('.frame')];
-    for (const el of targets) if (el) (el as HTMLElement).scrollTop = 0;
-    window.scrollTo(0, 0);
-  }, [screenKey]);
+  // Every new page starts at the top. The phase alone is not enough: the press
+  // room asks two questions and the summer runs three market rounds without it
+  // ever changing, and each of those is a new page to whoever is reading it.
+  const screenKey = !entered ? 'gate' : !introDone ? 'intro' : !booted ? 'title'
+    : `${gs.phase}|${gs.press?.q.text ?? ''}|${gs.preWeek}`;
+  useLayoutEffect(scrollToTop, [screenKey]);
 
   function startNew() {
     clearCareer();

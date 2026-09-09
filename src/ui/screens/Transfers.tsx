@@ -8,6 +8,7 @@ import { Meters, formatMoney } from '../components/bits.tsx';
 import { PlayerCard } from '../components/PlayerCard.tsx';
 import { Portal } from '../components/Portal.tsx';
 import { Icon } from '../components/Icon.tsx';
+import { scrollToTop } from '../scroll.ts';
 import { PlayerRow, ovrColor, LINE_OF, LINE_LABEL } from './Squad.tsx';
 import { MAX_SQUAD, MIN_SQUAD, sellPrice, contractTerms } from '../../game/transfers.ts';
 import type { FreeAgent } from '../../game/transfers.ts';
@@ -93,10 +94,10 @@ export function TransfersScreen({ gs, onSign, onSell, onBack }: {
         </div>
 
         <div className="seg" role="tablist">
-          <button role="tab" aria-selected={tab === 'market'} data-on={tab === 'market' ? '1' : '0'} onClick={() => { setTab('market'); setMsg(null); }}>
+          <button role="tab" aria-selected={tab === 'market'} data-on={tab === 'market' ? '1' : '0'} onClick={() => { setTab('market'); setMsg(null); scrollToTop(); }}>
             שחקנים חופשיים
           </button>
-          <button role="tab" aria-selected={tab === 'mine'} data-on={tab === 'mine' ? '1' : '0'} onClick={() => { setTab('mine'); setMsg(null); }}>
+          <button role="tab" aria-selected={tab === 'mine'} data-on={tab === 'mine' ? '1' : '0'} onClick={() => { setTab('mine'); setMsg(null); scrollToTop(); }}>
             מכירה מהספסל
           </button>
         </div>
