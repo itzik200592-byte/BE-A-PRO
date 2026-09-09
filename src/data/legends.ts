@@ -165,6 +165,14 @@ export function withLegend(
   managerName: string | undefined,
   rng: Rng,
   nextId: () => string,
+  /**
+   * How he arrives. A squad being built from nothing replaces its weakest man,
+   * so ראש העין lines up the same size as everybody else and no career starts
+   * with a spare. A squad already in use lets him join instead, up to the legal
+   * ceiling, because deleting a player the manager chose and paid for to make
+   * room for a surprise would be a rotten way to introduce him.
+   */
+  arrive: { mode: 'replace' } | { mode: 'join'; maxSquad: number } = { mode: 'replace' },
 ): { starters: Player[]; bench: Player[] } {
   if (!isLegendClub(city)) return squad;
   const here = [...squad.starters, ...squad.bench];
@@ -172,9 +180,17 @@ export function withLegend(
 
   const l = pickLegend(rng, managerName, here.map(p => p.name));
   if (!l || !squad.bench.length) return squad;
-
   const him = makeLegendPlayer(l, nextId());
-  // the weakest man on the bench makes way, which keeps the count honest
+
+  // Room in the squad means he simply signs on, and nobody is lost. This
+  // matters most for a career already under way: quietly deleting a player the
+  // manager chose and paid for, to make space for a surprise, would be a rotten
+  // way to introduce him.
+  if (arrive.mode === 'join' && here.length < arrive.maxSquad) {
+    return { starters: squad.starters, bench: [...squad.bench, him] };
+  }
+
+  // a full squad has to give somebody up, and it is the weakest man on the bench
   const bench = [...squad.bench];
   let worst = 0;
   for (let i = 1; i < bench.length; i++) {

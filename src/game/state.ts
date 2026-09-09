@@ -2,7 +2,7 @@ import type { Club } from '../data/clubs.ts';
 import type { ManagerId, ManagerType } from '../data/managers.ts';
 import { getManager } from '../data/managers.ts';
 import type { Squad } from '../data/squadGen.ts';
-import { playerValue, squadAvgOvr } from '../data/squadGen.ts';
+import { playerValue, squadAvgOvr, nextPlayerId } from '../data/squadGen.ts';
 import type { MatchResult, TeamInput, Approach, Press, Player, Position, Rng } from '../engine/matchEngine.ts';
 import { simulateMatch, overall, createRng } from '../engine/matchEngine.ts';
 import type { LeagueState, Fixture } from './league.ts';
@@ -10,7 +10,7 @@ import { initLeague, applyResult, sortedTable, buildFixtures, emptyTable } from 
 import { LEAGUE_C, isDerby, LEAGUE_NAMES, setDerbies, derbiesFromClubs } from '../data/clubs.ts';
 import { buildRegionLeague, buildSiblingLeague, siblingClub } from '../data/cities.ts';
 import { kitColor, type KitColorId } from '../data/palette.ts';
-import { isLegend } from '../data/legends.ts';
+import { isLegend, isLegendClub, withLegend } from '../data/legends.ts';
 import type { KitPattern } from '../data/kits.ts';
 import { debtState, debtLine, debtLimit } from './finance.ts';
 import { emptyYouth, seedYouth, advanceYouth } from './youth.ts';
@@ -850,9 +850,35 @@ function finishPreseason(gs: GameState): GameState {
 }
 
 export function enterSeason(gs: GameState): GameState {
+  gs = seasonWithLegend(gs);
   // the shirt is sold before a ball is kicked, and re-sold every summer
   if (!gs.sponsor || gs.sponsor.season !== gs.season) return { ...gs, phase: 'sponsor' };
   return maybeAssistantDeparture({ ...gs, phase: 'hub' });
+}
+
+/**
+ * One of the ראש העין regulars is in the dressing room when the season opens.
+ *
+ * They were being put in when a career BEGINS and again when a season rolls
+ * over, and that missed the case that matters most: a career already in
+ * progress. Itzik opened a season in ראש העין and there was nobody, because his
+ * squad was built before any of this existed and the rollover had not come
+ * round yet. The season opening is the boundary every career crosses, new or
+ * old, so it is the honest place for it.
+ *
+ * Does nothing at any other club, and nothing if one of them is already here.
+ */
+function seasonWithLegend(gs: GameState): GameState {
+  const me = club(gs);
+  if (!isLegendClub(me.city)) return gs;
+  const squad = mySquad(gs);
+  const next = withLegend(
+    squad, me.city, gs.profile.name,
+    createRng(gs.seasonSeed + gs.season * 811 + 5501), nextPlayerId,
+    { mode: 'join', maxSquad: MAX_SQUAD },
+  );
+  if (next === squad) return gs;
+  return { ...gs, league: { ...gs.league, squads: { ...gs.league.squads, [gs.clubId]: next } } };
 }
 
 /** The three deals on the table this summer. */

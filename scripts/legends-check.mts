@@ -160,6 +160,60 @@ const squadOf = (gs: G.GameState, clubId = gs.clubId) => {
   }
 }
 
+/* 9. A CAREER ALREADY UNDER WAY gets one at the next season opening.
+      This is the one that was missed and the one Itzik hit: he opened a season
+      in ראש העין and nobody turned up, because his squad was built before any
+      of this existed and a legend was only ever put in when a career BEGINS or
+      when a season rolls over. The season opening is the boundary every career
+      crosses, so that is where it has to happen too. */
+{
+  const strip = (gs: G.GameState): G.GameState => {
+    const sq = G.mySquad(gs);
+    return {
+      ...gs,
+      league: {
+        ...gs.league,
+        squads: {
+          ...gs.league.squads,
+          [gs.clubId]: {
+            starters: sq.starters.filter(p => !isLegend(p)),
+            bench: sq.bench.filter(p => !isLegend(p)),
+          },
+        },
+      },
+    };
+  };
+
+  let gs = career('בדיקה');
+  gs = G.afterSigning(gs, {});
+  gs = strip(gs);                       // a save from before the feature
+  const sizeBefore = G.squadSize(gs);
+  checked++;
+  if (squadOf(gs).some(isLegend)) fails.push('the fixture failed to strip him');
+
+  gs = G.enterSeason(gs);
+  const now = squadOf(gs).filter(isLegend);
+  checked += 2;
+  if (now.length !== 1) {
+    fails.push(`a career already under way opened a season with ${now.length} regulars, it has to be 1`);
+  }
+  // and he joins rather than displacing somebody the manager chose and paid for
+  if (G.squadSize(gs) !== sizeBefore + 1) {
+    fails.push(`he arrived by deleting a player: squad went ${sizeBefore} to ${G.squadSize(gs)}`);
+  }
+  console.log(`  a career already under way: ${now[0]?.name} joined at the season opening, squad ${sizeBefore} to ${G.squadSize(gs)}`);
+}
+
+/* 10. a fresh career is still the same size as everybody else's */
+{
+  const mine = career('בדיקה', LEGEND_TOWN);
+  const other = career('בדיקה', 'תל אביב');
+  checked++;
+  if (squadOf(mine).length !== squadOf(other).length) {
+    fails.push(`a new ${LEGEND_TOWN} career starts with ${squadOf(mine).length} men against ${squadOf(other).length}`);
+  }
+}
+
 console.log(`\n${checked} checks`);
 console.log(`${LEGENDS.length} regulars, ${Math.min(...LEGENDS.map(l => overall(makeLegendPlayer(l, 'x'))))} to ${Math.max(...LEGENDS.map(l => overall(makeLegendPlayer(l, 'x'))))} OVR, all aged ${LEGEND_AGE}`);
 if (fails.length) console.log('\n  ' + fails.slice(0, 8).join('\n  '));
