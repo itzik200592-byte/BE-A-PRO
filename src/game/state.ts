@@ -11,6 +11,8 @@ import { LEAGUE_C, isDerby, LEAGUE_NAMES, setDerbies, derbiesFromClubs } from '.
 import { buildRegionLeague, buildSiblingLeague, siblingClub } from '../data/cities.ts';
 import { kitColor, type KitColorId } from '../data/palette.ts';
 import { isLegend, isLegendClub, withLegend } from '../data/legends.ts';
+import { seasonKit, firstKit, reasonFor } from '../data/seasonKit.ts';
+import type { SeasonKit } from '../data/seasonKit.ts';
 import type { KitPattern } from '../data/kits.ts';
 import { debtState, debtLine, debtLimit } from './finance.ts';
 import { emptyYouth, seedYouth, advanceYouth } from './youth.ts';
@@ -72,7 +74,7 @@ export type Phase =
   | 'onboard-archetype' | 'onboard-manager' | 'onboard-club' | 'signing' | 'squad' | 'hub' | 'transfers' | 'invite'
   | 'dilemma' | 'tactic' | 'vs' | 'match' | 'result' | 'press' | 'season-end' | 'chronicle'
   | 'captain' | 'assistant' | 'coach' | 'preseason' | 'preseason-market' | 'inbox' | 'chat' | 'table' | 'stadium'
-  | 'packs' | 'sacked' | 'sponsor' | 'ultimatum' | 'rescue' | 'youth';
+  | 'packs' | 'sacked' | 'sponsor' | 'ultimatum' | 'rescue' | 'youth' | 'kit';
 
 export type MarketLine = 'gk' | 'def' | 'mid' | 'atk';
 
@@ -265,6 +267,10 @@ export interface GameState {
   /** what the club looked like when this summer round opened, so the game can
    *  tell a manager who is about to skip a round he has not used */
   summerMark: string | null;
+  /** every shirt this career has worn, newest last. A career you can read */
+  wardrobe: SeasonKit[];
+  /** the shirt waiting to be unveiled, cleared once he has seen it */
+  kitReveal: SeasonKit | null;
   /** the card just pulled from a pack, waiting to be signed or sold */
   pull: PackPull | null;
   /** the manager's own career: his abilities, his badge, his seasons */
@@ -348,6 +354,8 @@ export function newGame(seed = 12345): GameState {
     invite: emptyInvite(),
     inviteFrom: null,
     summerMark: null,
+    wardrobe: [],
+    kitReveal: null,
     pull: null,
     coach: newCoach('mental'),
   };
@@ -678,6 +686,11 @@ export function afterSigning(gs: GameState, effect: { morale?: number; prestige?
   // crisisDone, is what tells a returning manager from a first timer.
   const next = gs.nemesis ? 'sponsor' as const : 'squad' as const;
   gs = ensureYouth(gs);
+  // the shirt he arrives in goes into the wardrobe here, not at the season
+  // opening, because a fresh career walks to the squad screen and never passes
+  // through enterSeason at all. Without this his first shirt is missing and the
+  // summer after it reads as a first season, so he is never handed a new kit
+  gs = wearChosenKit(gs);
   return {
     ...gs,
     meters: {
@@ -851,9 +864,85 @@ function finishPreseason(gs: GameState): GameState {
 
 export function enterSeason(gs: GameState): GameState {
   gs = seasonWithLegend(gs);
+  gs = dressForTheSeason(gs);
+  // the new shirt is unveiled before anything else, because it is the first
+  // thing a club shows the world in the summer
+  if (gs.kitReveal) return { ...gs, phase: 'kit' };
+  return afterKit(gs);
+}
+
+/** The rest of the summer, once the shirt is on the table. */
+function afterKit(gs: GameState): GameState {
   // the shirt is sold before a ball is kicked, and re-sold every summer
   if (!gs.sponsor || gs.sponsor.season !== gs.season) return { ...gs, phase: 'sponsor' };
   return maybeAssistantDeparture({ ...gs, phase: 'hub' });
+}
+
+/**
+ * This season's shirt, unveiled before a ball is kicked.
+ *
+ * The colour never moves, because the colour is who the club is. What changes
+ * is the cut, the shade and the trim, and what decides them is what the manager
+ * did last season: gold across the chest for a title, a deeper shade for the
+ * year you went up. Over a career the wardrobe stops being decoration and turns
+ * into a record you can read without a word of text.
+ *
+ * Written onto the club as kitShirt and kitTrim rather than onto primary, so the
+ * crest and the club's identity stay exactly where they were.
+ */
+function dressForTheSeason(gs: GameState): GameState {
+  const worn = gs.wardrobe ?? [];
+  if (worn.some(k => k.season === gs.season && k.clubId === gs.clubId)) return gs;  // already dressed
+
+  const me = club(gs);
+  const last = previousKit(gs);
+  const reason = last ? reasonFor(gs.lastReport?.result, gs.season) : 'first';
+
+  // his first season at a club is the shirt HE chose on the way in, recorded as
+  // it is. There is nothing to unveil either: a reveal needs a shirt to stand
+  // the new one beside, and at the first one there is none
+  if (reason === 'first') return wearChosenKit(gs);
+
+  const kit = seasonKit(me, gs.season, reason, last);
+  const clubs = gs.league.clubs.map(c =>
+    c.id === gs.clubId ? { ...c, kitShirt: kit.shirt, kitTrim: kit.trim, kitPattern: kit.pattern } : c);
+
+  return {
+    ...gs,
+    league: { ...gs.league, clubs },
+    wardrobe: [...worn, kit],
+    kitReveal: kit,
+  };
+}
+
+/**
+ * Record the shirt he chose, as he chose it.
+ *
+ * Nothing is generated and nothing is unveiled: he picked these colours and this
+ * pattern himself on the way in, so the wardrobe simply opens with them. It is
+ * what every later kit is a change FROM, which is why it has to be here even
+ * though it looks like it does nothing.
+ */
+function wearChosenKit(gs: GameState): GameState {
+  const worn = gs.wardrobe ?? [];
+  if (worn.some(k => k.clubId === gs.clubId)) return gs;
+  return { ...gs, wardrobe: [...worn, firstKit(club(gs), gs.season)] };
+}
+
+/** He has seen the new shirt; on with the summer. */
+export function closeKitReveal(gs: GameState): GameState {
+  return afterKit({ ...gs, kitReveal: null });
+}
+
+/**
+ * The shirt this club wore last, for standing the new one beside.
+ *
+ * Same club only. A sacked manager's wardrobe spans two clubs, and holding up
+ * the shirt of the people who let him go as "last season" would be nonsense.
+ */
+export function previousKit(gs: GameState): SeasonKit | null {
+  const mine = (gs.wardrobe ?? []).filter(k => k.clubId === gs.clubId && k.season < gs.season);
+  return mine.length ? mine[mine.length - 1] : null;
 }
 
 /**

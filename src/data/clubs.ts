@@ -34,6 +34,9 @@ export interface Club {
   /** the manager's chosen shirt pattern, when he picked one; else the shirt
    *  follows the crest pattern. Only the player's own club carries this. */
   kitPattern?: 'solid' | 'stripes' | 'half' | 'sash' | 'hoops';
+  /** this season's shirt. primary stays the identity, and the crest with it */
+  kitShirt?: string;
+  kitTrim?: string;
   founded: number;
   tier: number;
   /** one line personality, shown on the pick screen */

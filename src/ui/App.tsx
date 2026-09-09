@@ -22,6 +22,7 @@ import { PressScreen } from './screens/Press.tsx';
 import { SeasonEnd, PreSeasonScreen } from './screens/SeasonEnd.tsx';
 import { SackedScreen } from './screens/Sacked.tsx';
 import { SponsorScreen } from './screens/Sponsor.tsx';
+import { KitReveal } from './screens/KitReveal.tsx';
 import { YouthScreen } from './screens/Youth.tsx';
 import { UltimatumScreen } from './screens/Ultimatum.tsx';
 import { RescueScreen } from './screens/Rescue.tsx';
@@ -264,6 +265,7 @@ export function App() {
       {gs.phase === 'ultimatum' && <UltimatumScreen gs={gs} onGo={() => setGs(G.advancePastPress(gs))} />}
       {gs.phase === 'sacked' && <SackedScreen gs={gs} onNext={() => setGs({ ...gs, phase: 'rescue' })} />}
       {gs.phase === 'rescue' && <RescueScreen gs={gs} onTake={() => setGs(G.takeRescue(gs))} onWalkAway={startNew} />}
+      {gs.phase === 'kit' && <KitReveal gs={gs} onDone={() => setGs(G.closeKitReveal(gs))} />}
       {gs.phase === 'sponsor' && <SponsorScreen gs={gs} onPick={id => setGs(G.takeSponsor(gs, id))} />}
       {gs.phase === 'preseason' && <PreSeasonScreen gs={gs} onStart={() => setGs(G.enterPreseason(gs))} />}
 

@@ -141,6 +141,10 @@ export function loadCareer(): GameState | null {
     invite: s.invite ?? emptyInvite(),
     inviteFrom: s.inviteFrom ?? null,
     summerMark: s.summerMark ?? null,
+    // a career saved before there were season kits simply starts its wardrobe
+    // at the next summer, and keeps the shirt it is already wearing until then
+    wardrobe: s.wardrobe ?? [],
+    kitReveal: s.kitReveal ?? null,
   };
   /**
    * A career saved before the manager had a standing has no record of what he

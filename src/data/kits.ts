@@ -55,9 +55,11 @@ export function awayOf(primary: string): Kit {
 export function homeKit(club: Club): Kit {
   // the manager's own chosen pattern wins; otherwise the shirt takes the style
   // of the badge, so a club with a striped crest wears a striped shirt
-  const pattern = (club as Club & { kitPattern?: KitPattern }).kitPattern
-    ?? crestToKit(club.pattern);
-  return homeOf(club.primary, club.accent, pattern);
+  const c = club as Club & { kitPattern?: KitPattern; kitShirt?: string; kitTrim?: string };
+  const pattern = c.kitPattern ?? crestToKit(club.pattern);
+  // a season shirt overrides the look but never the identity: primary stays what
+  // the crest is drawn from, so a club does not change colour when it changes kit
+  return homeOf(c.kitShirt ?? club.primary, c.kitTrim ?? club.accent, pattern);
 }
 
 /**

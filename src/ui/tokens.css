@@ -991,3 +991,135 @@ input{font-family:inherit;}
   .turn-page{transition:none;}
   .turn-note{transition:none; opacity:1; transform:none;}
 }
+
+/* ------------------------------------------------------------- kit reveal */
+/* The summer kit launch: last season's shirt on the right, this season's
+   swinging in beside it. Every step is driven by data-in from React state
+   rather than an animation-delay, so what is on screen is always what the
+   component says is on screen. */
+.kit-reveal{flex:1;}   /* the frame is a column flexbox; grow into it so the button sits at the foot
+   and the reveal is not a short card floating in a screen of empty ground */
+/* the stage takes the slack rather than a spacer above the button, so the
+   shirts sit in the middle of the screen instead of a void sitting under them */
+.kit-stage{
+  flex:1; padding:0 14px 16px; display:flex; flex-direction:column;
+  gap:14px; align-items:center; justify-content:flex-start;
+}
+
+/* the launch photograph bleeds to the top edge of the case and fades into it,
+   so it reads as the room the shirt came out of rather than a picture stuck on
+   a card. The pair below takes the slack, which keeps the shirts centred in
+   whatever height is left on the phone. */
+.kit-launch{position:relative; width:calc(100% + 28px); margin:0 -14px; flex:none;}
+.kit-launch img{
+  display:block; width:100%; object-fit:cover; object-position:50% 46%;
+  /* the band, the shirts and the type are all sized off the viewport height,
+     because the one thing that must never happen here is the button being
+     pushed off the bottom of a short phone */
+  height:clamp(96px, 18.5vh, 150px);
+}
+.kit-launch::after{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.30) 0 14%, transparent 40%, var(--surface-3) 96%);
+}
+/* the hairline the tile normally wears on top, moved to the seam between the
+   room and the shirt, where it now does more work */
+.kit-launch::before{
+  content:""; position:absolute; left:0; right:0; bottom:0; height:1px; z-index:1;
+  background:linear-gradient(90deg, transparent 6%, rgba(233,185,73,.42) 50%, transparent 94%);
+}
+.kit-pair{
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  width:100%; min-height:186px; flex:1;
+}
+.kit-slot{margin:0; display:flex; flex-direction:column; align-items:center; gap:8px; position:relative;}
+.kit-slot figcaption{display:flex; flex-direction:column; align-items:center; gap:2px;}
+.kit-cap{
+  font-size:11px; font-weight:800; letter-spacing:.07em; color:var(--ink-faint);
+}
+.kit-cap-new{color:var(--gold);}
+.kit-year{font-size:12.5px; font-weight:700; color:var(--ink-dim);}
+
+/* last year's is present but past tense: smaller, cooler, slightly faded */
+.kit-old{opacity:.5; filter:saturate(.72);}
+
+/* the new one arrives from behind the old one and settles */
+.kit-new{
+  opacity:0; transform:translateX(26px) scale(.82) rotate(4deg);
+  transition:opacity .42s ease, transform .52s cubic-bezier(.2,.9,.25,1.05);
+}
+.kit-new[data-in="1"]{opacity:1; transform:none;}
+
+/* a soft glow behind the new shirt, so the eye lands on it and not on the old */
+.kit-halo{
+  position:absolute; inset:-14% -10% 22%; border-radius:50%; pointer-events:none;
+  background:radial-gradient(closest-side, rgba(233,185,73,.16), transparent 72%);
+  opacity:0; transition:opacity .5s ease .1s;
+}
+.kit-new[data-in="1"] .kit-halo{opacity:1;}
+.kit-reveal[data-champion="1"] .kit-halo{
+  background:radial-gradient(closest-side, rgba(233,185,73,.36), transparent 72%);
+}
+
+.kit-arrow{
+  color:var(--ink-dim); padding-bottom:34px;   /* sit level with the shirts, not with the captions under them */ 
+  opacity:0; transform:translateX(6px); transition:opacity .3s ease .08s, transform .3s var(--ease-out) .08s;
+}
+.kit-arrow[data-in="1"]{opacity:1; transform:none;}
+/* the chevron already points left, which in Hebrew is from last season toward
+   this one, so it is left exactly as it is */
+
+.kit-title{
+  text-align:center; opacity:0; transform:translateY(7px);
+  transition:opacity .34s ease, transform .34s var(--ease-out);
+}
+.kit-title[data-in="1"]{opacity:1; transform:none;}
+.kit-name{font-family:var(--font-display); font-size:22px; line-height:1.2; color:var(--ink);}
+.kit-note{font-size:13.5px; line-height:1.55; color:var(--ink-dim); margin-top:5px;}
+
+.kit-swatches{
+  display:flex; gap:7px; flex-wrap:wrap; justify-content:center; margin-top:2px;
+  opacity:0; transition:opacity .34s ease .06s;
+}
+.kit-swatches[data-in="1"]{opacity:1;}
+.kit-chip{
+  background:rgba(255,255,255,.05); color:var(--ink-dim); gap:6px;
+  border:1px solid var(--line);
+}
+.kit-dot{
+  width:12px; height:12px; border-radius:50%; display:inline-block; flex:none;
+  border:1px solid rgba(255,255,255,.25);
+}
+
+@media (prefers-reduced-motion: reduce){
+  .kit-new, .kit-arrow, .kit-title, .kit-swatches, .kit-halo{transition:none;}
+  .kit-new{opacity:1; transform:none;}
+}
+/* only a title earns this, so it is the one gold thing on the screen that is
+   not the shirt itself */
+.kit-crown{
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:10.5px; font-weight:900; letter-spacing:.06em;
+  color:#1B1305; padding:3px 9px; border-radius:999px;
+  background:linear-gradient(180deg,var(--gold-hi),var(--gold) 62%,var(--gold-lo));
+  box-shadow:0 3px 12px rgba(233,185,73,.28);
+  margin-bottom:-2px;
+}
+
+/* The shirts scale with the screen, keeping their own 100:108 ratio explicitly,
+   because an auto height against the svg width/height attributes came out
+   nearly twice as tall.
+
+   The child combinator matters: a bare "svg" also caught the trophy inside the
+   champion badge and blew a 12px icon up to 113px, which is what pushed the
+   button off the screen in the first place. */
+.kit-new > svg{--kw:clamp(112px, 17vh, 140px); width:var(--kw); height:calc(var(--kw) * 1.08);}
+.kit-old > svg{--kw:clamp(82px, 12.3vh, 100px); width:var(--kw); height:calc(var(--kw) * 1.08);}
+.kit-pair{min-height:clamp(148px, 23vh, 186px);}
+.kit-name{font-size:clamp(19px, 2.7vh, 22px);}
+/* and so do the gaps, so a short phone spends its pixels on the shirts rather
+   than on air between them */
+.kit-reveal{gap:clamp(8px, 1.7vh, 14px); padding-bottom:clamp(14px, 3vh, 32px);}
+.kit-stage{gap:clamp(9px, 1.7vh, 14px); padding-bottom:clamp(10px, 2vh, 16px);}
+.kit-reveal .hint{margin:0;}
