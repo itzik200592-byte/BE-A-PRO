@@ -41,7 +41,9 @@ function career(seed: number, city: string): Run {
     rescued: false, welcomed: false, reunion: false, finalTier: 0,
   };
   let sawUltimatum = false;
-  let crisisWeek = -1;
+  // season AND week: comparing week numbers alone counted a crisis in week 4 of
+  // one season and a sacking in week 4 of another as the same moment
+  let crisisAt = '';
 
   for (let season = 1; season <= 6; season++) {
     gs = G.enterSeason(gs);
@@ -59,14 +61,14 @@ function career(seed: number, city: string): Run {
           tactic: { formation: DEFAULT_FORMATION, approach: 'balanced', press: 'mid' }, chemistry: 0.7, isHome: false },
         inp.seed + w);
       gs = G.commitRound(gs, res);
-      if (!hadCrisis && gs.crisisDone) crisisWeek = w;
+      if (!hadCrisis && gs.crisisDone) crisisAt = `${season}:${w}`;
 
       if (gs.sacking && !out.sacked) {
         out.sacked = true;
         out.tier = gs.sacking.tier;
         out.season = gs.sacking.season;
         out.warnedFirst = sawUltimatum;
-        out.warnedSameWeekAsCrisis = crisisWeek === w;
+        out.warnedSameWeekAsCrisis = crisisAt === `${season}:${w}`;
       }
       gs = G.continueFromResult(gs);
       if (gs.phase === 'ultimatum') { sawUltimatum = true; gs = G.advancePastPress(gs); }

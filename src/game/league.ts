@@ -2,6 +2,8 @@ import type { Club } from '../data/clubs.ts';
 import type { Squad } from '../data/squadGen.ts';
 import { makeSquad, squadAvgOvr } from '../data/squadGen.ts';
 import { sectorForCity } from '../data/names.ts';
+import { withLegend } from '../data/legends.ts';
+import { nextPlayerId } from '../data/squadGen.ts';
 import { createRng } from '../engine/matchEngine.ts';
 import { leagueCeiling } from '../data/clubs.ts';
 
@@ -56,7 +58,7 @@ export function emptyTable(clubs: Club[]): Record<string, Standing> {
 }
 
 /** Build a league. AI squads get a spread of quality around the tier ceiling. */
-export function initLeague(clubs: Club[], seasonSeed: number): LeagueState {
+export function initLeague(clubs: Club[], seasonSeed: number, managerName?: string): LeagueState {
   const rng = createRng(seasonSeed);
   const ceiling = leagueCeiling(clubs[0].tier);
   const squads: Record<string, Squad> = {};
@@ -64,7 +66,10 @@ export function initLeague(clubs: Club[], seasonSeed: number): LeagueState {
   clubs.forEach(c => {
     // strength spread: some clubs a bit better, some worse, plus club identity
     const target = ceiling - 6 + Math.round(rng() * 10);
-    const sq = makeSquad(target, rng, c.traits, sectorForCity(c.city));
+    // ראש העין always has one of its own in the dressing room
+    const sq = withLegend(
+      makeSquad(target, rng, c.traits, sectorForCity(c.city)),
+      c.city, managerName, rng, nextPlayerId);
     squads[c.id] = sq;
     ovr[c.id] = squadAvgOvr(sq);
   });

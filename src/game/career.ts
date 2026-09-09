@@ -14,6 +14,7 @@ import { cityClubsForTier, regionClubs } from '../data/cities.ts';
 import type { Squad } from '../data/squadGen.ts';
 import { makePlayer, makeSquad, nextPlayerId } from '../data/squadGen.ts';
 import { majoritySector, sectorForCity } from '../data/names.ts';
+import { withLegend } from '../data/legends.ts';
 import type { Player, Rng } from '../engine/matchEngine.ts';
 import { overall, createRng } from '../engine/matchEngine.ts';
 
@@ -602,6 +603,8 @@ export function buildNextSeason(input: {
   standings: Club[];
   /** the town the career is rooted in, so a rebuilt division stays regional */
   homeCity?: string;
+  /** the manager's own name, so he is never handed himself as a player */
+  managerName?: string;
   position: number;
   teams: number;
   minSquad: number;
@@ -636,12 +639,18 @@ export function buildNextSeason(input: {
 
   // Everyone ages, nobody resets. A rival you already know keeps its squad and
   // does its own business, a club you have never met gets a fresh one.
-  const squads: Record<string, Squad> = { [myClubId]: aged.squad };
+  const squads: Record<string, Squad> = {
+    // his own club too: if the man who lived here has finally retired, the next
+    // one along comes in, because there is always one of them at ראש העין
+    [myClubId]: withLegend(aged.squad, myClub.city, input.managerName, rng, nextPlayerId),
+  };
   for (const c of others) {
     const existing = input.squads[c.id];
     squads[c.id] = existing && newTier === tier
       ? aiOffSeason(existing, rng, newTier, input.minSquad)
-      : makeSquad(leagueCeiling(newTier) - 5 + Math.round(rng() * 8), rng, c.traits, sectorForCity(c.city));
+      : withLegend(
+          makeSquad(leagueCeiling(newTier) - 5 + Math.round(rng() * 8), rng, c.traits, sectorForCity(c.city)),
+          c.city, input.managerName, rng, nextPlayerId);
   }
 
   return {

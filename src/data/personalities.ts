@@ -20,6 +20,8 @@
  */
 
 import type { Player } from '../engine/matchEngine.ts';
+import type { Legend } from './legends.ts';
+import { legendByName } from './legends.ts';
 import { overall } from '../engine/matchEngine.ts';
 
 export type Tone = 'fun' | 'warn' | 'heart' | 'pro';
@@ -460,6 +462,11 @@ export function assignTraits(players: Player[]): Map<string, Trait[]> {
 
   // stars pick first so the marquee personalities land on players you watch
   for (const { p } of [...rated].sort((a, b) => b.o - a.o)) {
+    // A ראש העין regular came with his own reputation written down. Handing him
+    // a personality from the general pool would contradict the one line the
+    // whole character exists for, so he keeps his.
+    const own = legendByName(p.name);
+    if (own) { map.set(p.id, [legendTrait(own)]); continue; }
     if (!chosen.has(p.id)) { map.set(p.id, []); continue; }
 
     const ordered = orderedTraits(p);
@@ -505,3 +512,23 @@ export const TONE_COLOR: Record<Tone, string> = {
   heart: 'var(--win)',
   pro: 'var(--sky)',
 };
+
+/* --------------------------------------------------------- the regulars */
+
+/**
+ * A ראש העין regular's own reputation, as a trait.
+ *
+ * Everybody else's personality is drawn from the shared pool and shuffled so
+ * two squads never read alike. These ten arrived with theirs already written,
+ * and it is the reason each of them is in the game, so it is pinned rather than
+ * rolled.
+ */
+export function legendTrait(l: Legend): Trait {
+  return {
+    id: `legend-${l.key}`,
+    group: `legend-${l.key}`,
+    label: l.label,
+    line: () => l.says,
+    tone: l.tone,
+  };
+}

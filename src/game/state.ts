@@ -10,6 +10,7 @@ import { initLeague, applyResult, sortedTable, buildFixtures, emptyTable } from 
 import { LEAGUE_C, isDerby, LEAGUE_NAMES, setDerbies, derbiesFromClubs } from '../data/clubs.ts';
 import { buildRegionLeague, buildSiblingLeague, siblingClub } from '../data/cities.ts';
 import { kitColor, type KitColorId } from '../data/palette.ts';
+import { isLegend } from '../data/legends.ts';
 import type { KitPattern } from '../data/kits.ts';
 import { debtState, debtLine, debtLimit } from './finance.ts';
 import { emptyYouth, seedYouth, advanceYouth } from './youth.ts';
@@ -451,7 +452,7 @@ export function pickCity(gs: GameState, cityName: string, kit?: KitColorId, patt
           }
         : c))
     : region.clubs;
-  const league = initLeague(clubs, gs.seasonSeed);
+  const league = initLeague(clubs, gs.seasonSeed, gs.profile.name);
   // the chosen city rides on the club itself (club.city), no extra state needed
   return pickClub({ ...gs, league }, region.myId);
 }
@@ -526,7 +527,7 @@ export function takeRescue(gs: GameState): GameState {
   const nemesis: Nemesis = {
     clubId: s.clubId, name: s.club, short: s.short, city: s.city, tier: s.tier, season: s.season,
   };
-  let league = initLeague(region.clubs, seed);
+  let league = initLeague(region.clubs, seed, gs.profile.name);
 
   // Sacked in the bottom division there is nothing below it, so the club across
   // town is in the same league and the derby is this season rather than the one
@@ -1831,12 +1832,16 @@ const surname = (n: string) => n.split(' ').slice(-1)[0];
  */
 function dilemmaCtx(gs: GameState, star: string, rivalShort: string, rivalId: string): DilemmaCtx {
   const sq = mySquad(gs);
-  const all = [...sq.starters, ...sq.bench];
+  // The ראש העין regulars are never the man asking to leave or demanding a move.
+  // He lives up the road, the club is his home, and the whole point of him is
+  // that he stayed. He is still eligible to be the scorer or the veteran, which
+  // are things that happen TO him rather than demands he makes.
+  const all = [...sq.starters, ...sq.bench].filter(p => !isLegend(p));
   const apps = (p: Player) => gs.seasonStats[p.id]?.apps ?? 0;
   const goals = (p: Player) => gs.seasonStats[p.id]?.goals ?? 0;
 
   // the forgotten man: fewest appearances, bench first, oldest as the tie break
-  const forgotten = [...sq.bench, ...sq.starters]
+  const forgotten = [...sq.bench, ...sq.starters].filter(p => !isLegend(p))
     .sort((a, b) => apps(a) - apps(b) || b.age - a.age)[0];
   const kid = all.filter(p => p.age <= 20).sort((a, b) => overall(b) - overall(a))[0];
   const old = all.filter(p => p.age >= 32).sort((a, b) => b.age - a.age)[0];
@@ -2405,6 +2410,8 @@ export function startNextSeason(gs: GameState): GameState {
     // who was actually in the division, in finishing order, so it is not rebuilt
     standings: table.map(row => gs.league.clubs.find(c => c.id === row.clubId)!).filter(Boolean),
     homeCity: myClub.city,
+    // so a manager is never handed himself as a player
+    managerName: gs.profile.name,
     position, teams,
     minSquad: MIN_SQUAD,
     stadiumOk: gs.stadium.capacity >= requiredCapacity(myClub.tier + 1),
