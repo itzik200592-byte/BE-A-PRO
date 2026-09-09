@@ -924,3 +924,12 @@ input{font-family:inherit;}
   border:1px solid color-mix(in srgb, var(--gold) 34%, transparent);
 }
 .meters-share:active{transform:scale(.94);}
+
+/* onto the home screen. Sits beside the share button in the always-on bar */
+.meters-install{
+  flex:none; width:34px; height:34px; border-radius:11px;
+  display:grid; place-items:center;
+  background:rgba(255,255,255,.07); color:var(--ink-dim);
+  border:1px solid var(--line-2);
+}
+.meters-install:active{transform:scale(.94);}

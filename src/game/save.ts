@@ -13,6 +13,7 @@ import { GEMS_AT_START } from './packs.ts';
 import { primePlayerIds } from '../data/squadGen.ts';
 import { setDerbies, derbiesFromClubs } from '../data/clubs.ts';
 import { newCoach } from './coach.ts';
+import { emptyInvite } from './invite.ts';
 import { DEFAULT_FORMATION } from '../data/formations.ts';
 
 const KEY = 'beapro.career.v1';
@@ -136,7 +137,26 @@ export function loadCareer(): GameState | null {
     // archetype it was saved with, which no longer exists, so newCoach falls
     // back to a sane default
     coach: s.coach ?? newCoach(s.profile?.type ?? 'mental'),
+    // friends brought in, on a save from before there was anybody to bring
+    invite: s.invite ?? emptyInvite(),
+    inviteFrom: s.inviteFrom ?? null,
   };
+  /**
+   * A career saved before the manager had a standing has no record of what he
+   * achieved, so it is reconstructed from what the save does know: the division
+   * he is in is at least as high as any he has managed, and every season above
+   * the bottom had to be climbed to. Better an honest floor than a manager who
+   * won four divisions being told he is an unknown.
+   */
+  if (patched.coach) {
+    const tier = patched.league?.clubs?.find(c => c.id === patched.clubId)?.tier ?? 1;
+    patched.coach = {
+      ...patched.coach,
+      bestTier: patched.coach.bestTier ?? Math.max(1, tier),
+      promotions: patched.coach.promotions ?? Math.max(0, tier - 1),
+      titles: patched.coach.titles ?? 0,
+    };
+  }
   if (patched.phase === 'match') return { ...patched, phase: 'hub' };
   return patched;
 }

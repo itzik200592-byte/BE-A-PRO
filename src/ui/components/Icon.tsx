@@ -7,7 +7,8 @@ export type IconName =
   | 'ball' | 'cardYellow' | 'cardRed' | 'sub' | 'clipboard' | 'injury'
   | 'alert' | 'glove' | 'trophy' | 'coins' | 'star' | 'flame'
   | 'chevron' | 'play' | 'pause' | 'shirt' | 'mic' | 'crowd'
-  | 'whistle' | 'flag' | 'target' | 'handshake' | 'calendar' | 'boot';
+  | 'whistle' | 'flag' | 'target' | 'handshake' | 'calendar' | 'boot'
+  | 'download';
 
 const S = { stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' };
 
@@ -114,6 +115,15 @@ function body(name: IconName) {
       </>);
     case 'boot':
       return <path d="M4 7.4h5.6l1.4 3.6 5.2 1.6a3.4 3.4 0 0 1 2.4 3.2v1.4a1.2 1.2 0 0 1-1.2 1.2H5.2A1.2 1.2 0 0 1 4 17.2z" {...S} />;
+
+    // onto the home screen: an arrow into a tray
+    case 'download':
+      return (
+        <g {...S}>
+          <path d="M12 3v10m0 0 3.6-3.6M12 13 8.4 9.4" />
+          <path d="M4.6 15.4v2.8A2.2 2.2 0 0 0 6.8 20.4h10.4a2.2 2.2 0 0 0 2.2-2.2v-2.8" />
+        </g>
+      );
   }
 }
 

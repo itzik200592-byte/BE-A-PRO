@@ -86,10 +86,19 @@ export interface Coach {
   licence: LicenceId;
   /** seasons managed, for the profile screen */
   seasons: number;
+  /** the highest division he has ever managed in, which is what a CV is read on */
+  bestTier: number;
+  /** divisions climbed, however he got up */
+  promotions: number;
+  /** divisions won outright */
+  titles: number;
 }
 
 export function newCoach(archetype: ManagerId): Coach {
-  return { archetype, attrs: { ...getManager(archetype).base }, licence: 'amateur', seasons: 0 };
+  return {
+    archetype, attrs: { ...getManager(archetype).base }, licence: 'amateur',
+    seasons: 0, bestTier: 1, promotions: 0, titles: 0,
+  };
 }
 
 const CAP = 20;
@@ -110,11 +119,6 @@ export function applyCourse(c: Coach, to: LicenceId): Coach {
   spread(TRAINING_KEYS, l.gain.training);
   spread(MENTAL_KEYS, l.gain.mental);
   return { ...c, attrs, licence: to };
-}
-
-export function coachRating(c: Coach): number {
-  const vals = Object.values(c.attrs);
-  return Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 5);   // 1..100 for display
 }
 
 /* -------------------------------------------------------------- the effects */
@@ -160,3 +164,109 @@ export function coachYouthGrowth(c: Coach): number {
 
 /** A hard coach keeps his players on the right side of the referee. */
 export function coachCardBias(c: Coach): number { return swing(c.attrs.discipline, -0.03); }
+
+/* ------------------------------------------------------- the standing 1..100 */
+
+/**
+ * What the football world thinks of this manager, one to a hundred.
+ *
+ * Deliberately not an average of his attributes. Those only move when he pays
+ * for a course, three or four times in a whole career, so a rating built on
+ * them would sit still for seasons at a time and mean nothing. A manager's
+ * standing is what he has DONE: how high he has managed, what he has won, how
+ * long he has lasted, what he is qualified for, and only then how much craft he
+ * has added since he started.
+ *
+ * A brand new manager is exactly 1. A hundred is a man who has won the top
+ * division, holds the international badge, and has the seasons behind him to
+ * prove it was not luck.
+ */
+export const RATING_WEIGHTS = {
+  /** how high he has managed. The single loudest signal in football */
+  level: 0.25,
+  /** promotions and titles */
+  honours: 0.22,
+  /** craft added since he began, which is what courses buy */
+  craft: 0.22,
+  /** seasons survived. A slow floor that rewards simply lasting */
+  experience: 0.18,
+  /** the badge on the wall */
+  badge: 0.13,
+} as const;
+
+/** Seasons at which the experience term is full. */
+const EXPERIENCE_FULL = 20;
+/** Promotions and titles at which the honours term is full. */
+const HONOURS_FULL = 12;
+/** The top division, for scaling the level term. */
+const TOP_TIER = 5;
+
+export interface RatingBreakdown {
+  rating: number;
+  parts: { key: keyof typeof RATING_WEIGHTS; label: string; got: number; of: number }[];
+}
+
+const LABEL: Record<keyof typeof RATING_WEIGHTS, string> = {
+  level: 'הליגה הגבוהה שאימנת בה',
+  honours: 'עליות ואליפויות',
+  craft: 'היכולת שהוספת בקורסים',
+  experience: 'עונות על הקווים',
+  badge: 'התעודה שבידך',
+};
+
+/** 0..1 for each term, so the breakdown and the number can never disagree. */
+function terms(c: Coach): Record<keyof typeof RATING_WEIGHTS, number> {
+  const base = getManager(c.archetype).base;
+  const keys = [...TRAINING_KEYS, ...MENTAL_KEYS] as (keyof CoachAttrs)[];
+  const avg = (o: CoachAttrs) => keys.reduce((s, k) => s + o[k], 0) / keys.length;
+  const from = avg(base);
+  // only growth counts, so the CV he picked does not hand him a head start
+  const craft = CAP > from ? (avg(c.attrs) - from) / (CAP - from) : 0;
+
+  const honours = (c.promotions ?? 0) + (c.titles ?? 0) * 2;
+  return {
+    level: clamp01(((c.bestTier ?? 1) - 1) / (TOP_TIER - 1)),
+    honours: clamp01(honours / HONOURS_FULL),
+    craft: clamp01(craft),
+    experience: clamp01((c.seasons ?? 0) / EXPERIENCE_FULL),
+    badge: clamp01(licenceRank(c.licence) / (LICENCE_ORDER.length - 1)),
+  };
+}
+
+const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+
+/** The number on his badge. Whole, always, like every meter in the game. */
+export function coachRating(c: Coach): number {
+  const t = terms(c);
+  let progress = 0;
+  for (const k of Object.keys(RATING_WEIGHTS) as (keyof typeof RATING_WEIGHTS)[]) {
+    progress += RATING_WEIGHTS[k] * t[k];
+  }
+  return Math.round(1 + 99 * clamp01(progress));
+}
+
+/** The same number, with what is holding it back, for the profile screen. */
+export function ratingBreakdown(c: Coach): RatingBreakdown {
+  const t = terms(c);
+  return {
+    rating: coachRating(c),
+    parts: (Object.keys(RATING_WEIGHTS) as (keyof typeof RATING_WEIGHTS)[])
+      .map(k => ({
+        key: k, label: LABEL[k],
+        got: Math.round(RATING_WEIGHTS[k] * t[k] * 99),
+        of: Math.round(RATING_WEIGHTS[k] * 99),
+      }))
+      .sort((a, b) => b.of - a.of),
+  };
+}
+
+/** What to call a manager of this standing, the way a card names a rarity. */
+export function standingName(rating: number): string {
+  if (rating >= 90) return 'שם עולמי';
+  if (rating >= 75) return 'מאמן צמרת';
+  if (rating >= 58) return 'מאמן מבוסס';
+  if (rating >= 40) return 'שם מוכר בליגה';
+  if (rating >= 24) return 'מאמן מן השורה';
+  if (rating >= 12) return 'מאמן צעיר';
+  return 'אלמוני';
+}

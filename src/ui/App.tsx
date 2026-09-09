@@ -35,7 +35,8 @@ import { StadiumScreen } from './screens/Stadium.tsx';
 import { PacksScreen } from './screens/Packs.tsx';
 import { CoachScreen } from './screens/Coach.tsx';
 import { InviteScreen } from './screens/Invite.tsx';
-import { setInviteHandler } from './components/bits.tsx';
+import { setInviteHandler, setInstallHandler } from './components/bits.tsx';
+import { InstallSheet } from './components/InstallSheet.tsx';
 import { refFromUrl } from '../game/invite.ts';
 
 export function App() {
@@ -49,6 +50,7 @@ export function App() {
   const [fromPreseason, setFromPreseason] = useState(false);   // market opened from the summer board
   // who sent this link, kept for the moment a career actually starts. Read once
   // on load, because the url is tidied straight afterwards
+  const [installOpen, setInstallOpen] = useState(false);
   const [ref] = useState<string | null>(() => {
     try { return refFromUrl(location.search); } catch { return null; }
   });
@@ -56,9 +58,12 @@ export function App() {
   // one handler for the share button that sits in the meters bar on every
   // screen. The functional update keeps it from closing over a stale state
   useEffect(() => {
-    if (!booted) { setInviteHandler(null); return; }
+    if (!booted) { setInviteHandler(null); setInstallHandler(null); return; }
     setInviteHandler(() => setGs(prev => G.openInvite(prev)));
-    return () => setInviteHandler(null);
+    // the install offer is a sheet rather than a phase, so it can be opened
+    // from the middle of anything without losing where the manager was
+    setInstallHandler(() => setInstallOpen(true));
+    return () => { setInviteHandler(null); setInstallHandler(null); };
   }, [booted]);
 
   // an invite link carries the beta door code, so a friend walks straight in
@@ -243,6 +248,7 @@ export function App() {
       {gs.phase === 'result' && <ResultScreen gs={gs} onContinue={() => setGs(G.continueFromResult(gs))} />}
       {gs.phase === 'press' && <PressScreen key={gs.press?.q.text} gs={gs} onAnswer={i => setGs(G.answerPress(gs, i))} />}
       {gs.phase === 'chat' && <ChatScreen gs={gs} onDone={() => setGs(G.closeChat(gs))} />}
+      {installOpen && <InstallSheet onClose={() => setInstallOpen(false)} />}
       {gs.phase === 'invite' && (
         <InviteScreen gs={gs}
           onRedeem={code => {

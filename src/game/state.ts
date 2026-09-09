@@ -2484,7 +2484,16 @@ export function startNextSeason(gs: GameState): GameState {
     gems: gs.gems + (r.result === 'champion' || r.result === 'promoted' ? GEMS_ON_PROMOTION : 0),
     adsWatched: 0,
     pull: null,
-    coach: { ...gs.coach, seasons: gs.coach.seasons + 1 },
+    // his CV, which is what his standing is read off. A division won counts as
+    // a title as well as a climb, because winning one is not the same as
+    // scraping up through the play off places
+    coach: {
+      ...gs.coach,
+      seasons: gs.coach.seasons + 1,
+      bestTier: Math.max(gs.coach.bestTier ?? 1, next.report.newTier),
+      promotions: (gs.coach.promotions ?? 0) + (r.result === 'champion' || r.result === 'promoted' ? 1 : 0),
+      titles: (gs.coach.titles ?? 0) + (r.result === 'champion' ? 1 : 0),
+    },
     // the academy has its summer too: one kid breaks out, the eighteen year olds
     // come up for a decision, and a new intake arrives
     youth: advanceYouth(

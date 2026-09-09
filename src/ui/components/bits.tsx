@@ -1,6 +1,7 @@
 import type { Club } from '../../data/clubs.ts';
 import { Crest } from './Crest.tsx';
 import { Icon } from './Icon.tsx';
+import { installKind } from '../install.ts';
 import { Gem } from './Gem.tsx';
 
 /** Every club mark in the game is the vector crest. */
@@ -16,11 +17,18 @@ export function Badge({ club, size = 44 }: { club: Club; size?: number }) {
 let inviteHandler: (() => void) | null = null;
 export function setInviteHandler(fn: (() => void) | null): void { inviteHandler = fn; }
 
+/** Same arrangement for the install offer, which the App owns. */
+let installHandler: (() => void) | null = null;
+export function setInstallHandler(fn: (() => void) | null): void { installHandler = fn; }
+
 export function Meters({ money, morale, prestige, gems }: {
   money: number; morale: number; prestige: number;
   /** premium currency, shown as a compact pill when provided */
   gems?: number;
 }) {
+  const kind = installKind();
+  const offerInstall = !!installHandler && kind !== 'installed' && kind !== 'none';
+
   return (
     <div className="meters">
       <Meter icon="coins" label="תקציב" value={formatMoney(money)} pct={100} color="var(--gold)" />
@@ -30,6 +38,16 @@ export function Meters({ money, morale, prestige, gems }: {
         color={morale >= 55 ? 'var(--win)' : morale >= 35 ? 'var(--gold)' : 'var(--loss)'}
       />
       {gems !== undefined && <GemPill n={gems} />}
+      {/* read at render rather than passed in: fourteen screens draw this bar
+          and none of them should have to know about installing. Chrome fires
+          its event a moment after load, and the bar redraws often enough to
+          pick it up. Absent on desktop and once the game is already installed. */}
+      {gems !== undefined && offerInstall && (
+        <button className="meters-install" onClick={() => installHandler?.()}
+          aria-label="שים את המשחק על מסך הבית" title="הוסף למסך הבית">
+          <Icon name="download" size={16} />
+        </button>
+      )}
       {/* the same condition as the gems: a career is running. Keying it off the
           handler instead would not work, because a module variable changing
           does not tell React to draw the bar again. */}
