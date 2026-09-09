@@ -140,6 +140,7 @@ export function loadCareer(): GameState | null {
     // friends brought in, on a save from before there was anybody to bring
     invite: s.invite ?? emptyInvite(),
     inviteFrom: s.inviteFrom ?? null,
+    summerMark: s.summerMark ?? null,
   };
   /**
    * A career saved before the manager had a standing has no record of what he

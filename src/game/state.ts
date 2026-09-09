@@ -261,6 +261,9 @@ export interface GameState {
   invite: InviteState;
   /** the screen to return to when the invite sheet closes */
   inviteFrom: Phase | null;
+  /** what the club looked like when this summer round opened, so the game can
+   *  tell a manager who is about to skip a round he has not used */
+  summerMark: string | null;
   /** the card just pulled from a pack, waiting to be signed or sold */
   pull: PackPull | null;
   /** the manager's own career: his abilities, his badge, his seasons */
@@ -343,6 +346,7 @@ export function newGame(seed = 12345): GameState {
     adsWatched: 0,
     invite: emptyInvite(),
     inviteFrom: null,
+    summerMark: null,
     pull: null,
     coach: newCoach('mental'),
   };
@@ -705,7 +709,39 @@ export function enterPreseason(gs: GameState): GameState {
     else if (firstEver) contracts[id] = seedContract(id);
     else contracts[id] = 3;   // a kid up from the youth signs a three year deal
   }
-  return { ...gs, phase: 'preseason-market', preWeek: 1, preResolved: [], contracts, pendingOutcome: null };
+  const opened = { ...gs, phase: 'preseason-market' as const, preWeek: 1, preResolved: [], contracts, pendingOutcome: null };
+  return { ...opened, summerMark: summerFingerprint(opened) };
+}
+
+/* --------------------------------------------------- using the summer */
+
+/**
+ * Everything a summer round lets a manager change, in one string.
+ *
+ * Taken as a fingerprint rather than a counter incremented by each action, so
+ * it cannot drift: anything new that touches the squad, the contracts, the
+ * ground, the badge or the academy registers here without being told to.
+ */
+export function summerFingerprint(gs: GameState): string {
+  const sq = mySquad(gs);
+  return [
+    [...sq.starters, ...sq.bench].map(p => p.id).sort().join(','),
+    gs.preResolved.length,
+    gs.stadium.project ? `${gs.stadium.project.label}:${gs.stadium.project.roundsLeft}` : '',
+    gs.coach.licence,
+    gs.gems,
+    gs.youth.players.length,
+    Object.keys(gs.contracts).length,
+  ].join('|');
+}
+
+/**
+ * Is the manager about to skip a summer round without having used it? The
+ * window is the one part of the year where the squad can actually be changed,
+ * so walking past it in silence is a decision worth asking about once.
+ */
+export function summerUntouched(gs: GameState): boolean {
+  return gs.summerMark !== null && summerFingerprint(gs) === gs.summerMark;
 }
 
 /* ------------------------------------------------------- coaching badges */
@@ -781,7 +817,9 @@ export function advancePreseason(gs: GameState): GameState {
     gs.market, club(gs).tier, createRng(gs.seasonSeed + 4100 + next * 31), taken,
     { marquee: next >= PRE_ROUNDS },
   );
-  return { ...gs, preWeek: next, market, pendingOutcome: null };
+  const opened = { ...gs, preWeek: next, market, pendingOutcome: null };
+  // a fresh mark for the new round, so each one is judged on its own
+  return { ...opened, summerMark: summerFingerprint(opened) };
 }
 
 /**

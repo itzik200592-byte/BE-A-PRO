@@ -10,6 +10,8 @@ import { assignTraits } from '../../data/personalities.ts';
 import { Meters, formatMoney, StatBox } from '../components/bits.tsx';
 import { Crest } from '../components/Crest.tsx';
 import { Icon } from '../components/Icon.tsx';
+import { Portal } from '../components/Portal.tsx';
+import { RoundTurn } from '../components/RoundTurn.tsx';
 import { Stepper } from '../components/Stepper.tsx';
 import { PlayerCard } from '../components/PlayerCard.tsx';
 import { ovrColor, LINE_OF, LINE_LABEL, LINE_COLOR } from './Squad.tsx';
@@ -40,6 +42,31 @@ export function PreSeasonMarket({
   const events = G.preseasonEvents(gs);
   const lastRound = gs.preWeek >= PRE_ROUNDS;
   const blocked = G.preseasonBlockedReason(gs);
+  // a round the manager never touched, and the calendar beat that follows
+  const [nudge, setNudge] = useState(false);
+  const [turning, setTurning] = useState<{ from: number; to: number } | null>(null);
+
+  /**
+   * The continue button. A summer round left completely untouched gets one
+   * question first, because the window is the only part of the year when the
+   * squad can actually be changed and skipping it in silence is expensive.
+   * Asked once per round, never twice, and never on the way into the season
+   * itself where the choice has already been made.
+   */
+  function tryAdvance() {
+    if (blocked) return;
+    if (!lastRound && G.summerUntouched(gs)) { setNudge(true); return; }
+    goOn();
+  }
+
+  function goOn() {
+    setNudge(false);
+    if (lastRound) { onAdvance(); return; }
+    // advance first so the beat lands on the round the manager is entering
+    const from = gs.preWeek;
+    onAdvance();
+    setTurning({ from, to: from + 1 });
+  }
 
   const [card, setCard] = useState<Player | null>(null);
   const traits = useMemo(() => assignTraits([...sq.starters, ...sq.bench]), [sq]);
@@ -153,7 +180,7 @@ export function PreSeasonMarket({
         </button>
 
         <div className="spacer" />
-        <button className="btn" onClick={onAdvance} disabled={!!blocked}>
+        <button className="btn" onClick={tryAdvance} disabled={!!blocked}>
           {blocked
             ? <>{blocked}</>
             : lastRound
@@ -168,6 +195,20 @@ export function PreSeasonMarket({
           <p className="hint" style={{ textAlign: 'center' }}>
             נשארו <span className="num">{PRE_ROUNDS - gs.preWeek}</span> מחזורי קיץ לפני שהליגה מתחילה
           </p>
+        )}
+
+        {nudge && (
+          <UnusedRound
+            name={gs.profile.nickname || gs.profile.name}
+            left={PRE_ROUNDS - gs.preWeek}
+            onMarket={() => { setNudge(false); onOpenMarket(); }}
+            onAnyway={goOn}
+          />
+        )}
+        {turning && (
+          <RoundTurn from={turning.from} to={turning.to} of={PRE_ROUNDS}
+            note="השוק התרענן, יש שמות חדשים"
+            onDone={() => setTurning(null)} />
         )}
       </div>
 
@@ -399,5 +440,46 @@ function RoundDots({ round }: { round: number }) {
         }} />
       ))}
     </span>
+  );
+}
+
+
+/**
+ * One question before a wasted round.
+ *
+ * Not a warning and not a block: the manager may well have decided to stand
+ * pat, and the second button says so without argument. It exists because the
+ * summer is three rounds long and a manager who walks through all three without
+ * touching anything has usually not understood that he could.
+ */
+function UnusedRound({ name, left, onMarket, onAnyway }: {
+  name: string; left: number; onMarket: () => void; onAnyway: () => void;
+}) {
+  return (
+    <Portal>
+      <div className="sheet-scrim" onClick={onAnyway}>
+        <div className="sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label="מחזור קיץ שלא נוצל">
+          <div className="sheet-grip" />
+          <div className="row" style={{ gap: 11, alignItems: 'flex-start' }}>
+            <Icon name="alert" size={22} color="var(--gold)" />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="h2" style={{ fontSize: 19 }}>{name}, לא עשית כלום המחזור הזה</div>
+              <p className="hint" style={{ margin: '6px 0 0' }}>
+                חלון ההעברות הוא הזמן היחיד בשנה לשנות את הסגל, ואתה עומד לוותר על מחזור שלם ממנו.
+                {left > 1
+                  ? <> נשארו לך עוד <span className="num">{left}</span> מחזורים.</>
+                  : <> זה המחזור האחרון לפני שהליגה מתחילה.</>}
+              </p>
+            </div>
+          </div>
+          <button className="btn" style={{ marginTop: 15 }} onClick={onMarket}>
+            <Icon name="handshake" size={17} /> קח אותי לשוק
+          </button>
+          <button className="btn dark" style={{ marginTop: 8 }} onClick={onAnyway}>
+            אני יודע, תמשיך למחזור הבא
+          </button>
+        </div>
+      </div>
+    </Portal>
   );
 }

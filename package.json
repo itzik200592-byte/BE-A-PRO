@@ -30,7 +30,8 @@
     "check:gems": "node --experimental-strip-types scripts/gem-economy.mts",
     "check:coach": "node --experimental-strip-types scripts/coach-check.mts",
     "check:install": "node --experimental-strip-types scripts/install-check.mts",
-    "check:scroll": "node --experimental-strip-types scripts/scroll-check.mts"
+    "check:scroll": "node --experimental-strip-types scripts/scroll-check.mts",
+    "check:summer": "node --experimental-strip-types scripts/summer-check.mts"
   },
   "dependencies": {
     "react": "^18.3.1",
