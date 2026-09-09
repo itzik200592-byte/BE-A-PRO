@@ -104,9 +104,6 @@ function IosSteps() {
       <Step n={3}>
         לחץ <b style={{ color: 'var(--gold-hi)' }}>הוסף</b> למעלה, וזה שם
       </Step>
-      <p className="hint" style={{ margin: '4px 0 0' }}>
-        באייפון אפל לא מאפשרת לאפליקציה להתקין את עצמה, אז זה השלב היחיד שצריך לעשות ידנית.
-      </p>
     </div>
   );
 }
