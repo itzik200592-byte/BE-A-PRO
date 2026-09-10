@@ -73,11 +73,15 @@ export function PlayerRow({ p, traits, state, onOpen, swap, onSwap, captain }: {
           {young && <span className="chip" style={{ marginInlineStart: 6, background: 'rgba(51,194,122,.18)', color: 'var(--win)' }}>כישרון</span>}
         </div>
         <div className="sub" style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {/* Pace and shooting used to follow the age here. Two numbers out of
+              six, on a row that already carries the overall rating, telling a
+              manager almost nothing and crowding out the line that says who the
+              man actually is. His own card carries all six, one tap away. */}
           {trait
             ? <><span style={{ color: TONE_COLOR[trait.tone], fontWeight: 700 }}>{trait.label}</span>
                 <span style={{ opacity: .5 }}> · </span>
                 גיל <span className="num">{p.age}</span></>
-            : <>גיל <span className="num">{p.age}</span> · מהי <span className="num">{p.attrs.pace}</span> · בעי <span className="num">{p.attrs.shooting}</span></>}
+            : <>גיל <span className="num">{p.age}</span></>}
         </div>
       </div>
       <div className="score-face" style={{ fontSize: 26, color: ovrColor(o), width: 34, textAlign: 'center' }}>{o}</div>

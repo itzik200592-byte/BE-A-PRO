@@ -1892,14 +1892,60 @@ export function matchupScout(gs: GameState): Scout | null {
   const edge = (mine - opp) + (iAmHome ? 2 : -1);
   const verdict: Scout['verdict'] = edge >= 4 ? 'favourite' : edge <= -4 ? 'underdog' : 'even';
 
-  const line =
-    verdict === 'favourite'
-      ? 'על הנייר אתם חזקים יותר. אל תתנו להם להתארגן, אבל אל תיפתחו מטומטם.'
-      : verdict === 'underdog'
-        ? 'הם חזקים מכם. משחק התקפי מדי מול קבוצה כזאת ייגמר רע, שקול להיסגר ולתפוס מהמעבר.'
-        : 'מאבק שקול. הפרטים יכריעו, טקטיקה נכונה ורגע אחד.';
+  const derby = isDerby(gs.clubId, oppId);
+  const pool = derby ? SCOUT_LINES.derby : SCOUT_LINES[verdict];
+  // stable for this fixture, different from one round to the next, so the same
+  // advice does not greet him fourteen weeks running
+  const line = pool[lineSeed(`${gs.season}|${gs.week}|${oppId}`) % pool.length];
 
   return { oppShort: oppClub.short, mine: Math.round(mine), opp: Math.round(opp), iAmHome, verdict, line };
+}
+
+/**
+ * What the assistant says before a tactic is picked.
+ *
+ * One fixed line per verdict used to do this, and one of the three ended with
+ * "אל תיפתחו מטומטם", which is not a thing a coach says and is not advice
+ * either. These are: every line names something the manager can actually go and
+ * do on the tactic screen he is about to open — a shape, a line of defence, a
+ * way of playing — so the read of the opponent turns into a decision instead of
+ * a mood.
+ *
+ * A derby has its own pool, because a derby is not a harder or easier fixture,
+ * it is a different kind of night.
+ */
+const SCOUT_LINES: Record<'favourite' | 'underdog' | 'even' | 'derby', string[]> = {
+  favourite: [
+    'על הנייר אתם חזקים יותר. אל תשחקו פתוח — אמצע חזק, ותנו להם לבוא אליכם.',
+    'אתם הקבוצה הטובה יותר, אז הסכנה כאן היא מתפרצת. קו הגנה מסודר ולא לרוץ קדימה כולם ביחד.',
+    'הפער לטובתכם. תחזיקו כדור, תשחקו סבלני, ואל תיתנו להם מצבים במתנה.',
+    'אתם פייבוריט. תיכנסו רציני מהדקה הראשונה, קבוצה כזאת חיה על רבע שעה של הפתעה.',
+  ],
+  underdog: [
+    'הם טובים מכם. קו הגנה נמוך, אמצע צפוף, ומתפרצות. לא להתפתות.',
+    'על הנייר אתם מתחת. תשחקו סגור ותיקחו את המשחק לכדורים עומדים ולפרטים.',
+    'הם חזקים. משחק פתוח מול קבוצה כזאת נגמר רע, תשמרו על הרשת וחכו לרגע.',
+    'קבוצה מעליכם. תסבלו, תישארו במשחק עד ה-70, ואז תראו מה יש על הספסל.',
+  ],
+  even: [
+    'מאבק שקול. מי שייקח את האמצע ייקח את המשחק, אז אל תוותרו עליו.',
+    'קבוצות באותה רמה. תשחקו מאוזן ואל תיפתחו — השער הראשון פה שווה כפול.',
+    'שקול לגמרי. תשמרו על הכדור, אל תמהרו, ותנצלו כל כדור עומד שתקבלו.',
+    'אין פייבוריט. תשמרו כוחות לרבע השעה האחרונה, שם המשחק הזה ייפול.',
+  ],
+  derby: [
+    'דרבי. תשכחו מהטבלה, תיכנסו חזק מהדקה הראשונה — פה מי שרוצה יותר לוקח.',
+    'דרבי. היציע לא יסלח על משחק רך, אבל בלי כרטיסים מיותרים. הרחקה כאן הורגת משחק.',
+    'זה דרבי. אמצע חזק וקור רוח, ואל תיסחפו אחרי האווירה.',
+    'דרבי. אל תשחקו פתוח בשביל הכבוד, תוצאה אחת מספיקה כדי להציל עונה.',
+  ],
+};
+
+/** Stable 0..999 from a string, so a fixture always gets the same line. */
+function lineSeed(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0) % 1000;
 }
 
 export interface MatchPreview {

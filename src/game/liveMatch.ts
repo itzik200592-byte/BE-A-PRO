@@ -383,9 +383,9 @@ function oppChance(st: LiveState, possNorm: number) {
       const gk = def.onPitch.find(p => p.position === 'GK');
       st.pending = {
         kind: 'def_keeper', minute: st.minute, q, shooterId: striker.id, shooterName: striker.name,
-        title: 'הם לבד מול השוער!', subtitle: `${striker.name} בורח אל ${gk?.name ?? 'השוער שלך'}`,
+        title: 'הם לבד מול השוער!', subtitle: `${striker.name} בורח מ${gk?.name ?? 'השוער שלך'}`,
         options: [
-          { id: 'rush', label: 'לצאת אליו', hint: 'מצמצם זווית, מנצח סיומת אבל חשוף לעיגול' },
+          { id: 'rush', label: 'לצאת אליו', hint: 'מצמצם זווית, סוגר אפשרות לסיומת אבל חשוף להקפצה מעל השוער' },
           { id: 'stay', label: 'להישאר על הקו', hint: 'מוכן לבעיטה, פחות טוב מול כדרור' },
         ],
       };
