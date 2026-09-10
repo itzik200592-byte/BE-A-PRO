@@ -492,6 +492,37 @@ function playerPossNorm(st: LiveState): number {
   return st.iAmHome ? norm : 1 - norm;
 }
 
+/**
+ * How many bookings turn into a sending off.
+ *
+ * It used to be one in twenty, which came out at a red every five to seven
+ * matches for your side — three or four times what real football does, and a
+ * tester reported it as happening constantly. This is the share that puts it at
+ * roughly one a season, which is what a sending off should feel like: the sort
+ * of thing you remember, not the sort of thing you plan around.
+ */
+const RED_SHARE = 0.018;
+
+/**
+ * Send a man off, for real.
+ *
+ * This existed only as a line in the ticker: the game announced "אדום! X מורחק"
+ * and then X carried on playing the other fifty minutes, because nothing ever
+ * took him off the pitch. Four out of five red cards in the game were a caption
+ * over nothing. Now he actually goes, and the side plays the rest of it short.
+ *
+ * A side already down to nine keeps its men. Football abandons a match at seven,
+ * and a simulation that walks a team off the pitch one by one is not drama, it
+ * is a bug with a whistle. Returns whether the sending off actually happened.
+ */
+function sendOff(s: Side, p: Player): boolean {
+  if (s.onPitch.length <= 9) return false;
+  const i = s.onPitch.findIndex(x => x.id === p.id);
+  if (i < 0) return false;
+  s.onPitch.splice(i, 1);
+  return true;
+}
+
 function maybeDiscipline(st: LiveState) {
   for (const s of [st.home, st.away]) {
     if (rand(st) < 2.3 / 90) {
@@ -504,8 +535,8 @@ function maybeDiscipline(st: LiveState) {
       for (let i = 0; i < outs.length; i++) { r -= weights[i]; if (r <= 0) { p = outs[i]; break; } }
       // a hard coach keeps his players on the right side of the line
       const cardBias = (s.tactic.press === 'high' ? 1.3 : 1) * (s.coach?.cards ?? 1);
-      if (rand(st) < 0.05 * cardBias) {
-        st.events.push({ minute: st.minute, type: 'red', teamId: s.id, playerName: p.name, text: `אדום! ${p.name} מורחק` });
+      if (rand(st) < RED_SHARE * cardBias && sendOff(s, p)) {
+        st.events.push({ minute: st.minute, type: 'red', teamId: s.id, playerName: p.name, text: `אדום! ${p.name} מורחק`, big: true });
       } else {
         st.events.push({ minute: st.minute, type: 'yellow', teamId: s.id, playerName: p.name, text: `צהוב ל${p.name}` });
       }
@@ -732,14 +763,12 @@ export function resolveDefTackle(st: LiveState, optionId: string): DefTackleOutc
         text: `${cb.name} עם גליץ׳ מושלם, מנקה את הכדור לקרן!` });
       outcome = 'slide-clear';
     } else if (rand(st) < 0.28) {
-      // mistimed: a foul, and sometimes the last man walks
-      const red = rand(st) < 0.2;
+      // mistimed: a foul, and sometimes the last man walks. A tactical foul on a
+      // clear run is a straight red far more often than a routine booking is,
+      // so this stays well above the general share below
+      const red = rand(st) < 0.13 && sendOff(playerSide(st), cb);
       st.events.push({ minute: st.minute, type: red ? 'red' : 'yellow', teamId: playerSide(st).id, playerName: cb.name,
-        text: red ? `אדום! ${cb.name} עוצר אותו בעבירה טקטית ומורחק` : `צהוב, ${cb.name} מפיל אותו ועוצר את ההתקפה` });
-      if (red) {
-        const oi = playerSide(st).onPitch.findIndex(x => x.id === cb.id);
-        if (oi >= 0) playerSide(st).onPitch.splice(oi, 1);   // down to ten men, felt for the rest of the match
-      }
+        text: red ? `אדום! ${cb.name} עוצר אותו בעבירה טקטית ומורחק` : `צהוב, ${cb.name} מפיל אותו ועוצר את ההתקפה`, big: red });
       outcome = red ? 'slide-red' : 'slide-yellow';
     } else {
       // beaten: they are through

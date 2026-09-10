@@ -1,0 +1,135 @@
+/**
+ * The phone's back button.
+ *   node --experimental-strip-types scripts/back-check.mts
+ *
+ * On Android, back is how people navigate everything, and in here it threw them
+ * straight out of the game. Every tester read it as a crash.
+ *
+ * The failure mode this guards against is not the wiring breaking — it is the
+ * wiring going stale. Somebody adds a screen with a back arrow next month, the
+ * arrow works, and the phone's own button silently does something else on that
+ * screen and nobody notices for a season. So this reads the App and insists the
+ * two ways out agree with each other, screen by screen.
+ */
+import { readFileSync } from 'node:fs';
+
+const fails: string[] = [];
+let checked = 0;
+
+const app = readFileSync('src/ui/App.tsx', 'utf8');
+const back = readFileSync('src/ui/back.ts', 'utf8');
+
+/* 1. IT IS ACTUALLY ARMED.
+      Without a spare history entry in front of us there is nothing for a back
+      press to consume, popstate never fires, and the whole thing is decoration. */
+{
+  checked += 4;
+  if (!/history\.pushState/.test(back)) fails.push('back.ts never pushes a history entry, so a back press just leaves the page');
+  if (!/addEventListener\('popstate'/.test(back)) fails.push('back.ts never listens for popstate');
+  if (!/function onPop[\s\S]{0,200}pushSpare\(\)/.test(back)) {
+    fails.push('a consumed history entry is not replaced, so back works exactly once and then leaves');
+  }
+  if (!/armBack\(\)/.test(app)) fails.push('App never arms the back button');
+}
+
+/* 2. EVERY SCREEN WITH A BACK ARROW ANSWERS THE PHONE'S BUTTON TOO.
+      This is the one that goes stale. A screen shipped with onBack and left out
+      of the handler looks finished and is not: the arrow works, the phone's
+      button opens the leave-the-game question instead, on a screen that plainly
+      has somewhere to go back to. */
+{
+  // Only the render half of the file. The handler tests gs.phase too, and
+  // reading from the top of the file found the handler's own lines instead of
+  // the JSX — which made this look like it was checking six screens when there
+  // are twice that many.
+  const anchor = app.indexOf('}, [booted, gs.phase');
+  if (anchor < 0) fails.push('cannot find the end of the back handler, this check is guessing');
+  const render = app.slice(anchor);
+
+  const rendered = new Set<string>();
+  for (const m of render.matchAll(/gs\.phase === '([a-z-]+)'/g)) rendered.add(m[1]);
+
+  const withArrow = new Set<string>();
+  for (const phase of rendered) {
+    // the JSX block for this phase, up to wherever the next phase is tested
+    const at = render.indexOf(`gs.phase === '${phase}'`);
+    const next = render.indexOf("gs.phase === '", at + 20);
+    const block = render.slice(at, next < 0 ? render.length : next);
+    if (/onBack=/.test(block)) withArrow.add(phase);
+  }
+  checked++;
+  if (withArrow.size < 10) {
+    fails.push(`only ${withArrow.size} screens were found to have a back arrow, so this check is reading the wrong part of the file`);
+  }
+
+  // what the hardware handler knows about
+  const hStart = app.indexOf('setBackHandler(() => {');
+  const handler = app.slice(hStart, app.indexOf('}, [booted', hStart));
+  const hubList = /const BACK_TO_HUB = new Set<G\.Phase>\(\[([\s\S]*?)\]\)/.exec(app)?.[1] ?? '';
+  const toHub = new Set([...hubList.matchAll(/'([a-z-]+)'/g)].map(m => m[1]));
+
+  for (const phase of withArrow) {
+    checked++;
+    const named = new RegExp(`gs\\.phase === '${phase}'`).test(handler);
+    if (!named && !toHub.has(phase)) {
+      fails.push(`the "${phase}" screen has a back arrow, but the phone's back button does not know about it`);
+    }
+  }
+  console.log(`  ${withArrow.size} screens have a back arrow, and every one of them answers the phone's button`);
+}
+
+/* 3. AND THE MOMENTS THAT MUST BE ANSWERED HAVE NO BACK AT ALL.
+      A match, the press room, a dilemma, a sacking. Letting a stray thumb walk
+      out of one of those loses the answer the manager was asked for, which is
+      worse than the bug this whole file is about. */
+{
+  const PROTECTED = ['match', 'press', 'dilemma', 'tactic', 'vs', 'result',
+    'season-end', 'sacked', 'rescue', 'kit', 'sponsor', 'ultimatum', 'chat',
+    'signing', 'preseason', 'preseason-market'];
+  const hStart = app.indexOf('setBackHandler(() => {');
+  const handler = app.slice(hStart, app.indexOf('}, [booted', hStart));
+  const hubList = /const BACK_TO_HUB = new Set<G\.Phase>\(\[([\s\S]*?)\]\)/.exec(app)?.[1] ?? '';
+
+  for (const phase of PROTECTED) {
+    checked++;
+    if (new RegExp(`'${phase}'`).test(hubList)) {
+      fails.push(`"${phase}" can be backed out of to the hub, and it is a moment that has to be answered`);
+    }
+    if (new RegExp(`gs\\.phase === '${phase}'`).test(handler)) {
+      fails.push(`the back handler has a route out of "${phase}", which must not be interruptible`);
+    }
+  }
+  console.log(`  ${PROTECTED.length} moments that must be answered have no way back out of them`);
+}
+
+/* 4. AND WHEN THERE IS NOWHERE TO GO, IT ASKS.
+      The whole complaint was the game vanishing without a word. */
+{
+  checked += 3;
+  if (!/setExitOpen\(true\)/.test(app)) fails.push('with nowhere left to go the back button does nothing at all');
+  if (!/ExitSheet/.test(app)) fails.push('there is no leave-the-game question wired up');
+  if (!/leaveGame\(\)/.test(app)) fails.push('the leave-the-game question cannot actually let him leave');
+}
+
+/* 5. THE SHEETS CLOSE FIRST.
+      A sheet sitting over the hub is the thing on screen, so back has to shut it
+      rather than reach past it and ask about leaving the game. */
+{
+  const hStart = app.indexOf('setBackHandler(() => {');
+  const handler = app.slice(hStart, app.indexOf('}, [booted', hStart));
+  for (const sheet of ['exitOpen', 'installOpen']) {
+    checked++;
+    if (!new RegExp(`if \\(${sheet}\\)`).test(handler)) {
+      fails.push(`back reaches straight past the ${sheet} sheet instead of closing it`);
+    }
+    // and it must be handled before the fall-through that asks about leaving
+    if (handler.indexOf(sheet) > handler.indexOf('setExitOpen(true)')) {
+      fails.push(`the ${sheet} sheet is checked after the leave question, so back asks about leaving with a sheet open`);
+    }
+  }
+}
+
+console.log(`\n${checked} checks`);
+console.log(fails.length ? '\n  ' + fails.slice(0, 8).join('\n  ') + '\nFAIL'
+  : '\nOK, back means back, and leaving the game is asked for rather than assumed');
+process.exit(fails.length ? 1 : 0);

@@ -40,6 +40,19 @@ import { setInviteHandler, setInstallHandler } from './components/bits.tsx';
 import { InstallSheet } from './components/InstallSheet.tsx';
 import { refFromUrl } from '../game/invite.ts';
 import { scrollToTop } from './scroll.ts';
+import { armBack, setBackHandler, leaveGame } from './back.ts';
+import { ExitSheet } from './components/ExitSheet.tsx';
+
+/**
+ * Screens whose way out is simply the hub.
+ *
+ * Everything absent from this list has no back on purpose: a match, the press
+ * room, a dilemma, the season end, a sacking. Those are moments the manager has
+ * to answer, and letting a stray thumb walk out of them would lose the answer.
+ */
+const BACK_TO_HUB = new Set<G.Phase>([
+  'squad', 'youth', 'stadium', 'coach', 'packs', 'captain', 'assistant',
+]);
 
 export function App() {
   const [entered, setEntered] = useState(() => hasEntry());  // soft code gate for closed testing
@@ -53,6 +66,7 @@ export function App() {
   // who sent this link, kept for the moment a career actually starts. Read once
   // on load, because the url is tidied straight afterwards
   const [installOpen, setInstallOpen] = useState(false);
+  const [exitOpen, setExitOpen] = useState(false);
   const [ref] = useState<string | null>(() => {
     try { return refFromUrl(location.search); } catch { return null; }
   });
@@ -82,6 +96,43 @@ export function App() {
 
   // persist the career whenever it changes, so closing the tab is not a loss
   useEffect(() => { if (booted) saveCareer(gs); }, [gs, booted]);
+
+  /**
+   * The phone's back button, wired to whatever "back" means on this screen.
+   *
+   * Recomputed every render on purpose: back out of the squad screen goes to the
+   * hub, back out of the market might go to the summer board instead, and back
+   * during a match must do nothing at all — you do not get to leave a cup final
+   * by brushing the wrong part of the phone. Anything with no way back asks
+   * before it lets go of him.
+   */
+  useEffect(() => {
+    if (!booted) { setBackHandler(null); return; }
+    armBack();
+    setBackHandler(() => {
+      // sheets first: they sit on top of whatever screen is behind them
+      if (exitOpen) { setExitOpen(false); return true; }
+      if (installOpen) { setInstallOpen(false); return true; }
+      if (gs.phase === 'invite') { setGs(g => G.closeInvite(g)); return true; }
+
+      const back = BACK_TO_HUB.has(gs.phase);
+      if (gs.phase === 'squad' && squadFromHub) { setSquadFromHub(false); setGs(g => G.backToHub(g)); return true; }
+      if (gs.phase === 'transfers') {
+        if (fromPreseason) { setFromPreseason(false); setGs(g => G.backToPreseason(g)); }
+        else setGs(g => G.backToHub(g));
+        return true;
+      }
+      if (gs.phase === 'inbox') { setGs(g => G.closeInbox(g)); return true; }
+      if (gs.phase === 'chronicle') { setGs(g => G.closeChronicle(g)); return true; }
+      if (gs.phase === 'table') { setGs(g => G.closeTable(g)); return true; }
+      if (back) { setGs(g => G.backToHub(g)); return true; }
+
+      // nowhere left to go. Ask, rather than vanishing mid career
+      setExitOpen(true);
+      return false;
+    });
+    return () => setBackHandler(null);
+  }, [booted, gs.phase, squadFromHub, fromPreseason, installOpen, exitOpen]);
 
   // Every new page starts at the top. The phase alone is not enough: the press
   // room asks two questions and the summer runs three market rounds without it
@@ -251,6 +302,7 @@ export function App() {
       {gs.phase === 'press' && <PressScreen key={gs.press?.q.text} gs={gs} onAnswer={i => setGs(G.answerPress(gs, i))} />}
       {gs.phase === 'chat' && <ChatScreen gs={gs} onDone={() => setGs(G.closeChat(gs))} />}
       {installOpen && <InstallSheet onClose={() => setInstallOpen(false)} />}
+      {exitOpen && <ExitSheet onStay={() => setExitOpen(false)} onLeave={() => { setExitOpen(false); leaveGame(); }} />}
       {gs.phase === 'invite' && (
         <InviteScreen gs={gs}
           onRedeem={code => {

@@ -15,6 +15,7 @@ import {
 import { overall, createRng } from '../src/engine/matchEngine.ts';
 import { assignTraits } from '../src/data/personalities.ts';
 import { readFileSync } from 'node:fs';
+import { starTarget, youngTarget } from '../src/game/preseason.ts';
 
 const fails: string[] = [];
 let checked = 0;
@@ -204,7 +205,40 @@ const squadOf = (gs: G.GameState, clubId = gs.clubId) => {
   console.log(`  a career already under way: ${now[0]?.name} joined at the season opening, squad ${sizeBefore} to ${G.squadSize(gs)}`);
 }
 
-/* 10. a fresh career is still the same size as everybody else's */
+/* 10. HE IS NEVER THE ONE A BIGGER CLUB COMES FOR.
+       The one Itzik hit. Check 8 below guards the dilemma system, and that felt
+       like it covered "he never asks to leave" — it did not. The summer transfer
+       saga picks its man somewhere else entirely: the highest rated outfielder
+       aged thirty or under. These men are aged exactly thirty and rated at the
+       top of a ליגה ג׳ squad, so that rule chose one of them EVERY summer, and
+       the man written as the one who will not leave was handing in a transfer
+       request in his first one. */
+{
+  let picked = 0, careers = 0;
+  for (let seed = 0; seed < 40; seed++) {
+    const gs = career('בדיקה', LEGEND_TOWN, 5000 + seed * 17);
+    const star = starTarget(G.mySquad(gs));
+    careers++;
+    checked++;
+    if (star && isLegend(star)) {
+      picked++;
+      fails.push(`${star.name} was put up for transfer, and he does not leave ${LEGEND_TOWN}`);
+    }
+  }
+  // and somebody else IS still offered, or the saga quietly stops existing
+  checked++;
+  const gs = career('בדיקה', LEGEND_TOWN, 4711);
+  const star = starTarget(G.mySquad(gs));
+  if (!star) fails.push('nobody at all is a transfer target now, the summer saga is gone');
+  console.log(`  the summer transfer saga: ${careers - picked} of ${careers} careers came for somebody else`);
+
+  // the kid asking for a raise is age capped, so he can never be one of them
+  checked++;
+  const kid = youngTarget(G.mySquad(gs));
+  if (kid && isLegend(kid)) fails.push(`${kid.name} was picked as the underpaid kid, at ${LEGEND_AGE}`);
+}
+
+/* 11. a fresh career is still the same size as everybody else's */
 {
   const mine = career('בדיקה', LEGEND_TOWN);
   const other = career('בדיקה', 'תל אביב');

@@ -16,6 +16,7 @@ import { playerValue } from '../data/squadGen.ts';
 import type { ContractTerms } from './transfers.ts';
 import { transferFee } from './transfers.ts';
 import { playerWage } from './career.ts';
+import { isLegend } from '../data/legends.ts';
 
 export const PRE_ROUNDS = 3;
 
@@ -64,9 +65,16 @@ const FIELD = new Set(['CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'RW', 'LW', 'ST']);
  * The best outfield player you have, the one a bigger club would come for. Only
  * counts men young enough to still be a target, so a fading veteran does not
  * trigger a transfer saga.
+ *
+ * The ראש העין regulars are never it, and this is not a nicety: they are aged
+ * exactly thirty and rated at the top of the squad, so "highest rated outfielder
+ * aged thirty or under" picked one of them EVERY time. A man written as the one
+ * who will not leave because he lives in the town was handing in a transfer
+ * request in his first summer, every summer.
  */
 export function starTarget(sq: Squad): Player | null {
-  const pool = [...sq.starters, ...sq.bench].filter(p => FIELD.has(p.position) && p.age <= 30);
+  const pool = [...sq.starters, ...sq.bench]
+    .filter(p => FIELD.has(p.position) && p.age <= 30 && !isLegend(p));
   if (!pool.length) return null;
   return pool.sort((a, b) => overall(b) - overall(a))[0];
 }

@@ -137,9 +137,14 @@ const DESKTOP = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Ch
   if (!title.includes('isInstalled()')) {
     fails.push('the title screen would offer to install a game that already is');
   }
-  // and the sheet has to actually render there, which is before the career boots
-  const beforeBoot = app.slice(0, app.indexOf("gs.phase === 'invite'"));
-  if (!/TitleScreen[\s\S]{0,400}InstallSheet/.test(beforeBoot)) {
+  // and the sheet has to actually render there, which is before the career boots.
+  // Anchored on the TitleScreen tag itself: this used to slice the file at the
+  // first mention of a phase, and the moment anything else in the App mentioned
+  // one higher up, the slice stopped containing the title screen at all and this
+  // failed with the install offer working perfectly well.
+  const titleAt = app.indexOf('<TitleScreen');
+  if (titleAt < 0) fails.push('the App never renders a TitleScreen at all');
+  if (!/TitleScreen[\s\S]{0,400}InstallSheet/.test(app.slice(Math.max(0, titleAt)))) {
     fails.push('the sheet is not rendered alongside the title screen, so the button would do nothing there');
   }
 }
