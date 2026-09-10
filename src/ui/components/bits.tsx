@@ -26,8 +26,11 @@ export function Meters({ money, morale, prestige, gems }: {
   /** premium currency, shown as a compact pill when provided */
   gems?: number;
 }) {
-  const kind = installKind();
-  const offerInstall = !!installHandler && kind !== 'installed' && kind !== 'none';
+  // "already installed" is the only reason to hide this now. It used to also
+  // hide on 'none', which was every browser Chrome's install API does not
+  // reach — Firefox, Samsung Internet, Opera, Brave — and those are exactly the
+  // people who most needed telling where the option lives in their own menu.
+  const offerInstall = !!installHandler && installKind() !== 'installed';
 
   return (
     <div className="meters">

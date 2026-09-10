@@ -16,7 +16,7 @@
  * Either way the offer disappears once the game is already installed.
  */
 
-export type InstallKind = 'prompt' | 'ios' | 'installed' | 'none';
+export type InstallKind = 'prompt' | 'ios' | 'installed' | 'manual';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -54,8 +54,96 @@ export function isIos(): boolean {
 export function installKind(): InstallKind {
   if (isInstalled()) return 'installed';
   if (pending) return 'prompt';
-  if (isIos()) return 'ios';
-  return 'none';
+  // the drawn Safari steps are only true IN Safari. Chrome and Firefox on an
+  // iPhone look the part and are not allowed to install anything, so they get
+  // the written route instead, which starts by telling them so
+  if (isIos() && browserId() === 'safari') return 'ios';
+  return 'manual';
+}
+
+/* --------------------------------------------------- every other browser */
+
+/**
+ * Which browser this is, only to the level that changes the instruction.
+ *
+ * Order matters. Every one of these puts Chrome or Safari in its user agent
+ * string, so testing for Chrome first would call all of them Chrome and hand a
+ * Samsung Internet user a menu that does not exist on his phone.
+ */
+export type BrowserId = 'samsung' | 'firefox' | 'opera' | 'edge' | 'chrome' | 'safari' | 'other';
+
+export function browserId(ua = typeof navigator === 'undefined' ? '' : navigator.userAgent): BrowserId {
+  if (/SamsungBrowser/i.test(ua)) return 'samsung';
+  if (/Firefox\/|FxiOS/i.test(ua)) return 'firefox';
+  if (/OPR\/|OPiOS|Opera/i.test(ua)) return 'opera';
+  if (/Edg[A-Z]?\//i.test(ua)) return 'edge';
+  if (/CriOS|Chrome\//i.test(ua)) return 'chrome';
+  if (/Safari\//i.test(ua)) return 'safari';
+  return 'other';
+}
+
+export interface InstallGuide {
+  /** what to call this browser, so the steps are obviously about HIS browser */
+  browser: string;
+  steps: string[];
+  /** set when the browser genuinely cannot do it, and something else must */
+  blocked?: string;
+}
+
+const ANDROID = (name: string, steps: string[]): InstallGuide => ({ browser: name, steps });
+
+/**
+ * How to get the game onto the home screen in whatever he is actually using.
+ *
+ * The old answer here was a single line telling everyone who was not on Chrome
+ * or Safari to go and open the game somewhere else. That covered Firefox,
+ * Samsung Internet, Opera and Brave — a real slice of Android — and every one
+ * of them has "add to home screen" sitting in its own menu. Sending those people
+ * away was not a limitation, it was us not writing four sentences.
+ */
+export function installGuide(
+  ua = typeof navigator === 'undefined' ? '' : navigator.userAgent,
+): InstallGuide {
+  const id = browserId(ua);
+  const mobile = /Android|iPhone|iPad|iPod/i.test(ua);
+
+  if (isIos()) {
+    // on an iPhone only Safari can do this. No other browser there is allowed
+    // to, however Chrome-shaped it looks, so pretending otherwise wastes a
+    // minute of somebody's evening
+    if (id !== 'safari') {
+      return {
+        browser: 'הדפדפן הזה באייפון',
+        steps: ['פתח את הכתובת הזו בספארי', 'שם: כפתור השיתוף → הוספה למסך הבית'],
+        blocked: 'באייפון רק ספארי יכול להוסיף למסך הבית.',
+      };
+    }
+    return { browser: 'ספארי', steps: ['כפתור השיתוף למטה', 'גלול ובחר "הוספה למסך הבית"', 'הוסף'] };
+  }
+
+  if (mobile) {
+    switch (id) {
+      case 'samsung': return ANDROID('Samsung Internet', ['תפריט ☰ למטה', 'הוסף דף אל', 'מסך הבית']);
+      case 'firefox': return ANDROID('פיירפוקס', ['תפריט ⋮ למעלה', 'התקן', 'אישור']);
+      case 'opera':   return ANDROID('אופרה', ['תפריט ⋮', 'הוסף אל', 'מסך הבית']);
+      case 'edge':    return ANDROID('אדג׳', ['תפריט ⋯ למטה', 'הוסף לטלפון']);
+      default:        return ANDROID('הדפדפן שלך', ['תפריט ⋮ למעלה', 'הוסף למסך הבית', 'אישור']);
+    }
+  }
+
+  // desktop
+  switch (id) {
+    case 'firefox':
+      return {
+        browser: 'פיירפוקס במחשב',
+        steps: ['פתח את הכתובת הזו בכרום או באדג׳', 'שם: אייקון ההתקנה בשורת הכתובת'],
+        blocked: 'פיירפוקס במחשב לא תומך בהתקנת אפליקציות.',
+      };
+    case 'safari':
+      return { browser: 'ספארי במחשב', steps: ['תפריט קובץ', 'הוספה ל-Dock'] };
+    default:
+      return { browser: 'הדפדפן שלך', steps: ['אייקון ההתקנה בקצה שורת הכתובת', 'או: תפריט ⋮ → התקן'] };
+  }
 }
 
 /**

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Portal } from './Portal.tsx';
 import { asset } from '../asset.ts';
-import { installKind, promptInstall, watchInstall } from '../install.ts';
+import { installKind, promptInstall, watchInstall, installGuide } from '../install.ts';
 
 /**
  * Put the game on the home screen.
@@ -68,19 +68,39 @@ export function InstallSheet({ onClose }: { onClose: () => void }) {
 
           {kind === 'ios' && <IosSteps />}
 
-          {kind === 'none' && (
-            <div className="tile" style={{ marginTop: 14, padding: 14 }}>
-              <p className="hint" style={{ margin: 0 }}>
-                הדפדפן הזה לא מציע התקנה. פתח את המשחק בכרום באנדרואיד או בספארי באייפון,
-                ומשם אפשר לשים אותו על מסך הבית.
-              </p>
-            </div>
-          )}
+          {kind === 'manual' && <ManualSteps />}
 
           <button className="btn dark" style={{ marginTop: 12 }} onClick={onClose}>סגור</button>
         </div>
       </div>
     </Portal>
+  );
+}
+
+/**
+ * Everybody Chrome's install API does not reach.
+ *
+ * This used to be one sentence telling them to go and open the game in a
+ * different browser, which covered Firefox, Samsung Internet, Opera and Brave —
+ * a real slice of Android — and every one of those has "add to home screen"
+ * sitting in its own menu. The steps are named for the browser he is holding,
+ * because "open the menu" is a different menu in each of them, and when a
+ * browser genuinely cannot do it (Firefox on a desktop) it says so rather than
+ * sending him hunting.
+ */
+function ManualSteps() {
+  const guide = installGuide();
+  return (
+    <div className="stack" style={{ gap: 9, marginTop: 15 }}>
+      {/* ב swallows a definite ה in Hebrew: ב + הדפדפן is בדפדפן, never בהדפדפן.
+          Names that do not start with one (Samsung Internet, פיירפוקס) are
+          untouched. */}
+      <div className="label-cap" style={{ textAlign: 'center' }}>ב{guide.browser.replace(/^ה/, '')}</div>
+      {guide.blocked && (
+        <p className="hint" style={{ margin: '0 0 2px', textAlign: 'center' }}>{guide.blocked}</p>
+      )}
+      {guide.steps.map((s, i) => <Step key={s} n={i + 1}>{s}</Step>)}
+    </div>
   );
 }
 

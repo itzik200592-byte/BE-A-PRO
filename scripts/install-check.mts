@@ -2,12 +2,14 @@
  * The offer to install matches what the device can actually do.
  *   node --experimental-strip-types scripts/install-check.mts
  *
- * The whole point of this feature is not showing a button that does nothing.
- * Android has a real API, an iPhone has none at all, and a game already on the
- * home screen must not be asked again. Each of those is a different answer and
- * getting one wrong is worse than not offering at all.
+ * Every browser gets a route onto the home screen, and the route is the one
+ * that works in THAT browser. Chrome has a real install API. An iPhone has none
+ * and only Safari may do it at all. Firefox, Samsung Internet and Opera each
+ * have it buried in a different menu. A game already installed is never asked
+ * again. Getting one of these wrong sends somebody hunting for a button that is
+ * not there, which is worse than saying nothing.
  */
-import { installKind, isIos, isInstalled, wireInstall, promptInstall } from '../src/ui/install.ts';
+import { installKind, isIos, isInstalled, wireInstall, promptInstall, installGuide } from '../src/ui/install.ts';
 
 const fails: string[] = [];
 let checked = 0;
@@ -33,6 +35,13 @@ const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebK
 const IPAD_AS_MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15';
 const ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36';
 const DESKTOP = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36';
+const FIREFOX_ANDROID = 'Mozilla/5.0 (Android 14; Mobile; rv:121.0) Gecko/121.0 Firefox/121.0';
+const FIREFOX_DESKTOP = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0';
+const SAMSUNG = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 SamsungBrowser/23.0 Chrome/115 Mobile Safari/537.36';
+const OPERA_ANDROID = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36 OPR/79.0';
+const EDGE_ANDROID = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36 EdgA/120.0';
+const MAC_SAFARI = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15';
+const IPHONE_CHROME = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 CriOS/120.0 Mobile/15E148 Safari/604.1';
 
 /* 1. an iPhone is recognised, and gets the instructions rather than a dead button */
 {
@@ -69,19 +78,80 @@ const DESKTOP = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Ch
   }
 }
 
-/* 4. Android before the browser has spoken, and a desktop, get no offer.
-      Chrome fires its event some time after load, so until then there is
-      genuinely nothing to offer and a button would be a lie. */
+/* 4. NOBODY IS TURNED AWAY.
+      This used to assert the opposite: Android before Chrome had spoken, and
+      every desktop, were offered nothing at all. That was the policy, and the
+      policy was wrong — it covered Firefox, Samsung Internet, Opera and Brave,
+      all of which have "add to home screen" in their own menu, and told them to
+      go and open the game somewhere else. Every browser now gets a route. */
 {
-  pretend({ ua: ANDROID });
-  checked++;
-  if (installKind() !== 'none') fails.push(`Android with no event yet offered ${installKind()}`);
-  pretend({ ua: DESKTOP });
-  checked++;
-  if (installKind() !== 'none') fails.push(`a desktop offered ${installKind()}`);
+  for (const [what, ua] of [
+    ['Android before Chrome has spoken', ANDROID],
+    ['Firefox on Android', FIREFOX_ANDROID],
+    ['Samsung Internet', SAMSUNG],
+    ['Opera on Android', OPERA_ANDROID],
+    ['a desktop', DESKTOP],
+    ['Firefox on a desktop', FIREFOX_DESKTOP],
+  ] as [string, string][]) {
+    pretend({ ua });
+    checked++;
+    const k = installKind();
+    if (k === 'installed') fails.push(`${what}: told it is already installed when it is not`);
+    if (k !== 'prompt' && k !== 'ios' && k !== 'manual') {
+      fails.push(`${what}: offered "${k}", which is not a route anywhere`);
+    }
+  }
 }
 
-/* 5. asking to install with no event to work with says so rather than throwing */
+/* 5. AND THE ROUTE IS HIS BROWSER'S, NOT SOMEBODY ELSE'S.
+      "Open the menu" is a different menu in each of these. Handing a Samsung
+      Internet user Chrome's steps is the same failure as handing him nothing,
+      it just takes him longer to find out. */
+{
+  const cases: Array<[string, string, RegExp, boolean]> = [
+    // what, user agent, something only that browser's route would say, blocked?
+    ['Samsung Internet', SAMSUNG, /Samsung/, false],
+    ['Firefox on Android', FIREFOX_ANDROID, /פיירפוקס/, false],
+    ['Opera on Android', OPERA_ANDROID, /אופרה/, false],
+    ['Edge on Android', EDGE_ANDROID, /אדג׳/, false],
+    ['Firefox on a desktop', FIREFOX_DESKTOP, /פיירפוקס/, true],
+    ['Safari on a Mac', MAC_SAFARI, /Dock/, false],
+    ['Chrome on an iPhone', IPHONE_CHROME, /ספארי/, true],
+  ];
+  for (const [what, ua, wants, blocked] of cases) {
+    pretend({ ua, touch: /iPhone/.test(ua) ? 5 : 0 });
+    const g = installGuide(ua);
+    const all = [g.browser, ...g.steps, g.blocked ?? ''].join(' ');
+    checked += 3;
+    if (!g.steps.length) fails.push(`${what}: no steps at all`);
+    if (!wants.test(all)) fails.push(`${what}: the steps do not look like ${what}'s — "${all}"`);
+    if (blocked && !g.blocked) fails.push(`${what} cannot install and is not told so, it will hunt for a menu that is not there`);
+    if (!blocked && g.blocked) fails.push(`${what} is told it cannot install, and it can`);
+    // ב swallows a definite ה in Hebrew, so the sheet strips one before it
+    // prefixes the browser's name. A name that comes out as "בהדפדפן" is the
+    // kind of error nobody catches in a diff and everybody catches on a phone.
+    checked++;
+    const label = 'ב' + g.browser.replace(/^ה/, '');
+    if (label.startsWith('בה')) fails.push(`"${label}" is not Hebrew, ב and ה cannot both be there`);
+  }
+  console.log(`  ${cases.length} browsers, each given its own menu rather than somebody else's`);
+}
+
+/* 6. AN IPHONE THAT IS NOT SAFARI GETS THE TRUTH.
+      Only Safari may add to the home screen on iOS. Chrome and Firefox there
+      look the part and are not allowed to, so the drawn Safari steps would send
+      somebody looking for a share button that does not do it. */
+{
+  pretend({ ua: IPHONE_CHROME, touch: 5 });
+  checked += 2;
+  if (!isIos()) fails.push('Chrome on an iPhone was not recognised as iOS');
+  if (installKind() === 'ios') fails.push('Chrome on an iPhone was shown the Safari steps, which do not work there');
+  pretend({ ua: IPHONE });
+  checked++;
+  if (installKind() !== 'ios') fails.push('Safari on an iPhone lost its drawn steps');
+}
+
+/* 7. asking to install with no event to work with says so rather than throwing */
 {
   pretend({ ua: IPHONE });
   wireInstall();
@@ -90,7 +160,7 @@ const DESKTOP = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Ch
   if (r !== 'unsupported') fails.push(`prompting on an iPhone returned ${r}`);
 }
 
-/* 6. the worker exists and does not cache, which is what keeps a daily build
+/* 8. the worker exists and does not cache, which is what keeps a daily build
       from serving yesterday's code forever */
 {
   const fs = await import('node:fs');
@@ -105,7 +175,7 @@ const DESKTOP = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Ch
   if (!/caches\.delete/.test(sw)) fails.push('the worker never clears an older cache');
 }
 
-/* 7. the manifest says what a home screen icon needs */
+/* 9. the manifest says what a home screen icon needs */
 {
   const fs = await import('node:fs');
   const m = JSON.parse(fs.readFileSync('public/manifest.webmanifest', 'utf8'));
@@ -118,7 +188,7 @@ const DESKTOP = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Ch
   if (!m.name || !m.short_name) fails.push('the manifest has no name to put under the icon');
 }
 
-/* 8. the offer is reachable BEFORE a career, which is the whole point.
+/* 10. the offer is reachable BEFORE a career, which is the whole point.
       It first shipped only inside the meters bar, and that bar is drawn only on
       career screens, so a new arrival could not find it at all: he started in a
       browser tab and only met the option three screens in. The title screen is
@@ -149,7 +219,7 @@ const DESKTOP = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Ch
   }
 }
 
-console.log(`${checked} checks across iPhone, iPad, Android and desktop`);
+console.log(`${checked} checks across iPhone, iPad, Android, and every browser we can name`);
 if (fails.length) console.log('\n  ' + fails.slice(0, 8).join('\n  '));
-console.log(fails.length ? '\nFAIL' : '\nOK, every device is offered only what it can actually do');
+console.log(fails.length ? '\nFAIL' : '\nOK, every browser gets a route onto the home screen, and it is its own');
 process.exit(fails.length ? 1 : 0);
