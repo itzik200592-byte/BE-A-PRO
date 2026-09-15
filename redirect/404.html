@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>BE A PRO עבר לכתובת חדשה</title>
+<link rel="icon" href="/BE-A-PRO/icon-192.png">
+<meta http-equiv="refresh" content="2; url=https://beapromanager.github.io/">
+<style>
+  html,body{margin:0;height:100%;background:#050907;color:#f2efe6;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+  .wrap{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px 20px;box-sizing:border-box;
+    background:radial-gradient(120% 70% at 50% 0%,rgba(233,185,73,.16),transparent 60%),#050907}
+  img{width:88px;height:88px;border-radius:22px;box-shadow:0 12px 34px rgba(0,0,0,.6)}
+  h1{font-size:26px;margin:22px 0 8px;font-weight:900;letter-spacing:-.01em}
+  p{margin:0;color:#b9b4a6;font-size:16px;line-height:1.5;max-width:320px}
+  a.btn{display:block;width:100%;max-width:320px;margin-top:26px;padding:16px 20px;box-sizing:border-box;border-radius:14px;
+    background:linear-gradient(180deg,#f3cf6e,#e9b949 55%,#c9982f);color:#1b1305;font-weight:900;font-size:18px;text-decoration:none;
+    box-shadow:0 10px 26px rgba(233,185,73,.25)}
+  .url{margin-top:14px;font-size:14px;color:#e9b949;direction:ltr;font-weight:700}
+  .note{margin-top:28px;font-size:13px;color:#7f7a6e;max-width:320px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img src="/BE-A-PRO/icon-192.png" alt="">
+  <h1>BE A PRO עבר לכתובת חדשה</h1>
+  <p>המשחק עבר לבית משלו. מעבירים אותך לשם עכשיו.</p>
+  <a class="btn" id="go" href="https://beapromanager.github.io/">למשחק בכתובת החדשה</a>
+  <div class="url">beapromanager.github.io</div>
+  <p class="note">אם המשחק מותקן אצלך על מסך הבית, פתח את הכתובת החדשה והתקן אותו מחדש משם. הקריירה מתחילה מחדש בכתובת החדשה.</p>
+</div>
+<script>
+  // carry an invite link's query across, so a friend's link from the old
+  // address still opens the door at the new one
+  (function () {
+    var target = 'https://beapromanager.github.io/' + (location.search || '');
+    document.getElementById('go').href = target;
+    setTimeout(function () { location.replace(target); }, 1200);
+  })();
+</script>
+</body>
+</html>
